@@ -155,6 +155,9 @@ func (a *oauth2CC) tokenSource(scope template.Scope) (*oauth.Source, error) {
 		extra[key] = rendered
 	}
 	store := a.store
+	if store == nil && a.params["managed_refresh"] == true {
+		return nil, fmt.Errorf("oauth: automatic refresh requires a saved connection with managed token storage")
+	}
 	if store == nil {
 		store = oauth.NewMemoryStore(oauth.Token{RefreshToken: rendered["refresh_token"]})
 	}
@@ -168,4 +171,39 @@ func (a *oauth2CC) tokenSource(scope template.Scope) (*oauth.Source, error) {
 	}
 	a.source = source
 	return source, nil
+}
+
+// RefreshRejected renews a rejected access token once through the shared store.
+func RefreshRejected(ctx context.Context, a Authenticator, rejected string) (bool, error) {
+	switch a := a.(type) {
+	case *oauth2CC:
+		a.mu.Lock()
+		source := a.source
+		a.mu.Unlock()
+		if source == nil {
+			return false, nil
+		}
+		_, err := source.Refresh(ctx, rejected)
+		return true, err
+	case *chainAuth:
+		for _, child := range a.steps {
+			if handled, err := RefreshRejected(ctx, child, rejected); handled || err != nil {
+				return handled, err
+			}
+		}
+	}
+	return false, nil
+}
+
+// WithOAuthHTTPClient supplies the token endpoint transport before first use.
+// Callers must not change it while requests are in flight.
+func WithOAuthHTTPClient(a Authenticator, client *http.Client) {
+	switch a := a.(type) {
+	case *oauth2CC:
+		a.httpClient = client
+	case *chainAuth:
+		for _, child := range a.steps {
+			WithOAuthHTTPClient(child, client)
+		}
+	}
 }

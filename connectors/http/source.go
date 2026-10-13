@@ -195,7 +195,7 @@ func (s *Source) Validate(cfg filament.Config) error {
 			return fmt.Errorf("%s source: %s is required", s.name, field.Name)
 		}
 	}
-	if s.embeddedManifest != nil && s.embeddedManifest.Connection.Auth.Type == "select" {
+	if s.embeddedManifest != nil {
 		_, err := buildAuth(s.embeddedManifest.Connection.Auth, credentialsFromConfig(cfg, s.embeddedManifest.Config), processEnvironment())
 		return err
 	}
@@ -313,6 +313,9 @@ func (s *Source) TestConnection(ctx context.Context, cfg filament.Config) error 
 		return fmt.Errorf("%s source: configure connection probe: %w", s.name, err)
 	}
 	defer func() { _ = c.Teardown(ctx) }()
+	if field, _ := s.OAuthRefreshConfig(cfg); field != "" && s.oauthStore == nil {
+		return nil
+	}
 	if err := c.TestConnection(ctx); err != nil {
 		return fmt.Errorf("%s source: %w", s.name, err)
 	}
