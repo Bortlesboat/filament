@@ -11,6 +11,7 @@ import (
 
 	"github.com/galaxy-io/filament"
 	"github.com/galaxy-io/filament/secret/aws"
+	"github.com/galaxy-io/filament/secret/coordinated"
 	"github.com/galaxy-io/filament/secret/gcp"
 	"github.com/galaxy-io/filament/secret/postgres"
 	"github.com/galaxy-io/filament/secret/sqlite"
@@ -35,14 +36,34 @@ func FromEnv(ctx context.Context, store filament.DataStore) (filament.Secrets, e
 		if prefix := os.Getenv("SECRETS_PREFIX"); prefix != "" {
 			opts = append(opts, aws.WithPrefix(prefix))
 		}
-		return aws.NewFromConfig(ctx, opts...)
+		provider, err := aws.NewFromConfig(ctx, opts...)
+		if err != nil {
+			return nil, err
+		}
+		return coordinate(provider, store)
 	case "gcp-secret-manager":
 		var opts []gcp.Option
 		if prefix := os.Getenv("SECRETS_PREFIX"); prefix != "" {
 			opts = append(opts, gcp.WithPrefix(prefix))
 		}
-		return gcp.NewFromConfig(ctx, os.Getenv("GCP_PROJECT_ID"), os.Getenv("GCP_REGION"), opts...)
+		provider, err := gcp.NewFromConfig(ctx, os.Getenv("GCP_PROJECT_ID"), os.Getenv("GCP_REGION"), opts...)
+		if err != nil {
+			return nil, err
+		}
+		wrapped, err := coordinate(provider, store)
+		if err != nil {
+			_ = provider.Close()
+		}
+		return wrapped, err
 	default:
 		return nil, fmt.Errorf("secret: unknown SECRET_PROVIDER %q (unset for the datastore, aws-secrets-manager, gcp-secret-manager)", provider)
 	}
+}
+
+func coordinate(provider coordinated.Versioned, store filament.DataStore) (filament.Secrets, error) {
+	coordination, ok := store.(filament.SecretCoordinationStore)
+	if !ok {
+		return nil, fmt.Errorf("secret: datastore %q does not support external secret coordination", store.Name())
+	}
+	return coordinated.New(provider, coordination)
 }

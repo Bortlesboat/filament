@@ -201,24 +201,36 @@ refresh saves token state under the same encrypted reference. Connection
 replacement and deletion use the existing secret lifecycle. Unsaved connection
 validation must not exchange rotating tokens.
 
-Token state is encrypted in the existing secrets table. Refreshes and explicit
-replacements serialize under a Postgres row lock or SQLite writer transaction.
+Token state stays in the configured secret manager. PostgreSQL and SQLite store
+encrypted token values in the existing secrets table. Their refreshes and
+explicit replacements serialize under a row lock or writer transaction.
 SQLite holds its writer lock while requesting a token, so other writes wait.
 Token requests default to a 30-second timeout and store updates are bounded
-by 35 seconds. This avoids a separate lease service or background refresher.
-The supplied transaction callback must not reenter the same database.
+by 35 seconds. The transaction callback must not reenter the same database.
+
+AWS and GCP providers use `secret/coordinated` with a datastore implementing
+`filament.SecretCoordinationStore`. Shared startup wraps these providers
+automatically. Library users must construct the wrapper explicitly. Cloud token
+values remain in the secret manager. The datastore stores only lease ownership,
+version identifiers, and pending or deleted status. Each read uses the exact
+committed version. Replacement and deletion use the same coordination.
 
 Use `oauth.NewMemoryStore` for temporary credentials or tests. It shares state
-only within one process. The encrypted adapter rejects secret providers without
-atomic updates, including the environment, AWS and GCP providers. Applications
-with other storage can implement `oauth.Store` or use `oauth.StoreFunc`. The
-whole read, exchange and save operation must be serialized across callers.
-A conditional write after concurrent exchanges is insufficient.
+only within one process. The environment provider is read-only and cannot persist
+rotating tokens. Other integrations can implement `oauth.Store` or use
+`oauth.StoreFunc`. Serialize the whole read, exchange and save operation across
+callers. A conditional write after concurrent exchanges is insufficient.
 
-A returned token is available only after persistence succeeds. If saving fails,
-the source retains the exchange and tries to save it on the next call. It does
-not overwrite a newer authorization. A process crash after upstream rotation
-but before persistence can still require reauthorization. Remote token issuance
+For cloud stores, an interrupted update remains pending and blocks another
+exchange. Recover by supplying fresh authorization under a new managed reference.
+Do not write Filament-managed secrets outside the coordinated provider. A cloud write and an OAuth exchange
+cannot be committed as one database transaction.
+
+A returned token is available only after persistence succeeds. With the
+database-backed stores, if saving fails, the source retains the exchange and
+tries to save it on the next call. It does not overwrite a newer authorization.
+A process crash after upstream rotation but before persistence can still require
+reauthorization. Remote token issuance
 and local storage cannot share a transaction.
 
 Check `errors.Is(err, oauth.ErrReauthorizationRequired)` for an expired or revoked

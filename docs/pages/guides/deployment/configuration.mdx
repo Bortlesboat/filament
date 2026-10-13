@@ -100,6 +100,28 @@ GCP-safe IDs and retained in secret annotations. Grant workloads access through
 their attached service account or Workload Identity. Deleting a connection
 permanently deletes its managed GCP secrets.
 
+Managed OAuth refresh is supported with all four providers. Access tokens,
+refresh tokens, and expiry remain in the selected secret manager. Cloud providers
+write new versions under the same secret name. They do not require
+`ENCRYPTION_KEY`.
+
+For AWS and GCP, the datastore holds tenant-scoped coordination records with an
+owner, expiry, version identifier, and operation status. It contains no token
+values. Apply the secret coordination migration before starting the updated
+services. All servers and workers sharing secrets must use the same datastore
+and the updated secret provider wrapper.
+
+Cloud updates have a 35-second operation timeout inside a 60-second lease.
+Workers read the exact committed version instead of the provider's latest alias.
+Do not edit Filament-managed secrets directly in the cloud console. Replace
+credentials through connection settings so the version record is updated.
+
+An interrupted exchange or ambiguous cloud write blocks further automatic
+refreshes for that reference. Supply fresh credentials under a new managed
+reference to recover, then retire the old reference.
+Deleting a connection leaves a coordination tombstone to prevent stale workers
+from recreating its secret. Failed cloud deletion can be retried.
+
 ### Logs and OpenTelemetry
 
 | Variable | Default | Description |

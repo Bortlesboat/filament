@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
@@ -134,31 +135,58 @@ func (p *Provider) parentName() string {
 
 // Read fetches and decodes the latest version of the secret at ref.
 func (p *Provider) Read(ctx context.Context, ref string) (filament.Secret, error) {
-	out, err := p.client.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{Name: p.secretName(ref) + "/versions/latest"})
+	value, _, err := p.ReadVersion(ctx, ref, "")
+	return value, err
+}
+
+// SecretScope separates coordination for configured cloud namespaces.
+func (p *Provider) SecretScope() string {
+	return "gcp-secret-manager/" + p.parentName() + "/" + cmp.Or(p.prefix, defaultPrefix)
+}
+
+// ReadVersion reads an immutable version, or latest when version is empty.
+func (p *Provider) ReadVersion(ctx context.Context, ref, version string) (filament.Secret, string, error) {
+	if version != "" {
+		if _, err := strconv.ParseUint(version, 10, 64); err != nil {
+			return filament.Secret{}, "", errors.New("secret/gcp: invalid version number")
+		}
+	}
+	version = cmp.Or(version, "latest")
+	out, err := p.client.AccessSecretVersion(ctx, &secretmanagerpb.AccessSecretVersionRequest{Name: p.secretName(ref) + "/versions/" + version})
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			return filament.Secret{}, fmt.Errorf("secret/gcp: read %q: %w", ref, filament.ErrNotFound)
+			return filament.Secret{}, "", fmt.Errorf("secret/gcp: read %q: %w", ref, filament.ErrNotFound)
 		}
-		return filament.Secret{}, fmt.Errorf("secret/gcp: read %q: %w", ref, err)
+		return filament.Secret{}, "", fmt.Errorf("secret/gcp: read %q: %w", ref, err)
 	}
 	if out.Payload == nil {
-		return filament.Secret{}, fmt.Errorf("secret/gcp: read %q: empty secret", ref)
+		return filament.Secret{}, "", fmt.Errorf("secret/gcp: read %q: empty secret", ref)
 	}
 	var env envelope
 	if err := json.Unmarshal(out.Payload.Data, &env); err != nil {
-		return filament.Secret{}, fmt.Errorf("secret/gcp: read %q: decode: %w", ref, err)
+		return filament.Secret{}, "", fmt.Errorf("secret/gcp: read %q: decode: %w", ref, err)
 	}
 	if env.Ref != ref || env.Value == nil {
-		return filament.Secret{}, fmt.Errorf("secret/gcp: read %q: not a matching filament envelope", ref)
+		return filament.Secret{}, "", fmt.Errorf("secret/gcp: read %q: not a matching filament envelope", ref)
 	}
-	return filament.Secret{Tenant: env.Tenant, Value: env.Value, Meta: env.Meta}, nil
+	number, err := p.versionNumber(ref, out.Name)
+	if err != nil {
+		return filament.Secret{}, "", err
+	}
+	return filament.Secret{Tenant: env.Tenant, Value: env.Value, Meta: env.Meta}, number, nil
 }
 
 // Write creates the secret if absent, otherwise stores a new version.
 func (p *Provider) Write(ctx context.Context, ref string, s filament.Secret) error {
+	_, err := p.WriteVersion(ctx, ref, s)
+	return err
+}
+
+// WriteVersion appends a version to the same secret and returns its number.
+func (p *Provider) WriteVersion(ctx context.Context, ref string, s filament.Secret) (string, error) {
 	raw, err := json.Marshal(envelope{Ref: ref, Tenant: s.Tenant, Value: s.Value, Meta: s.Meta})
 	if err != nil {
-		return fmt.Errorf("secret/gcp: write %q: encode: %w", ref, err)
+		return "", fmt.Errorf("secret/gcp: write %q: encode: %w", ref, err)
 	}
 	name := p.secretName(ref)
 	secret, err := p.client.GetSecret(ctx, &secretmanagerpb.GetSecretRequest{Name: name})
@@ -176,18 +204,18 @@ func (p *Provider) Write(ctx context.Context, ref string, s filament.Secret) err
 		}
 	}
 	if err != nil {
-		return fmt.Errorf("secret/gcp: prepare %q: %w", ref, err)
+		return "", fmt.Errorf("secret/gcp: prepare %q: %w", ref, err)
 	}
 	if err := managed(secret, ref); err != nil {
-		return fmt.Errorf("secret/gcp: write %q: %w", ref, err)
+		return "", fmt.Errorf("secret/gcp: write %q: %w", ref, err)
 	}
-	_, err = p.client.AddSecretVersion(ctx, &secretmanagerpb.AddSecretVersionRequest{
+	version, err := p.client.AddSecretVersion(ctx, &secretmanagerpb.AddSecretVersionRequest{
 		Parent: name, Payload: &secretmanagerpb.SecretPayload{Data: raw},
 	})
 	if err != nil {
-		return fmt.Errorf("secret/gcp: write %q: %w", ref, err)
+		return "", fmt.Errorf("secret/gcp: write %q: %w", ref, err)
 	}
-	return nil
+	return p.versionNumber(ref, version.Name)
 }
 
 // ErrUnmanaged is returned when Provider cannot prove it owns a secret.
@@ -224,4 +252,18 @@ func (p *Provider) Delete(ctx context.Context, ref string) error {
 		return fmt.Errorf("secret/gcp: delete %q: %w", ref, err)
 	}
 	return nil
+}
+
+// Project IDs and their numeric project identifiers can name the same resource.
+// Read/write requests use the configured project; responses must identify the
+// requested regional secret, and only their immutable version number is saved.
+func (p *Provider) versionNumber(ref, name string) (string, error) {
+	parent, version, ok := strings.Cut(name, "/secrets/"+p.secretID(ref)+"/versions/")
+	if !ok || !strings.HasPrefix(parent, "projects/") || !strings.HasSuffix(parent, "/locations/"+p.region) {
+		return "", errors.New("secret/gcp: unexpected version name")
+	}
+	if n, err := strconv.ParseUint(version, 10, 64); err != nil || n == 0 {
+		return "", errors.New("secret/gcp: invalid version number")
+	}
+	return version, nil
 }
