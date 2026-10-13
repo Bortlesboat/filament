@@ -108,3 +108,20 @@ one replay. A second HTTP 401 fails the request.
 An optional `fallback_token: config.access_token` allows manual access-token
 connections when all refresh credentials are absent. Partial refresh credentials
 are rejected. Initial browser authorization remains external to Filament.
+
+## Response validation and field projections
+
+- `response.strict_records` rejects missing or null record paths and nonobject
+  array entries. `empty_object` allows a missing array when the named envelope
+  is an empty object. `required_objects` validates surrounding objects.
+- `response.match` checks record fields against config or parent templates.
+  `response.unwrap` selects exactly one object from `variants`, writes its name
+  to `tag`, and retains other wrapper fields under `remainder`. Conflicts fail.
+- Field `value` renders a config or parent template. String field `tuple` encodes
+  a collision-free JSON array of scalar record paths. `literal:` entries are
+  constants and `query:` entries encode the named nonempty query parameters.
+  Missing tuple components become empty strings, so identity components should
+  also be projected as required fields when they must exist.
+- Decimal fields can declare `precision` and `scale` for exact decimal128 output.
+  Out-of-range or overprecise values fail instead of being rounded. Existing
+  decimal declarations without precision keep their text representation.

@@ -430,6 +430,10 @@
             "properties": {
               "path": { "type": "string" },
               "type": { "type": "string", "enum": ["string", "bool", "int16", "int32", "int64", "float32", "float64", "decimal", "date", "time", "timestamp", "timestamptz", "json", "uuid"] },
+              "value": { "type": "string" },
+              "tuple": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+              "precision": { "type": "integer", "minimum": 1, "maximum": 38 },
+              "scale": { "type": "integer", "minimum": 0, "maximum": 38 },
               "max_string": { "type": "string", "minLength": 1 },
               "shape": { "type": "object", "additionalProperties": { "type": "string" } },
               "mode": { "type": "string", "enum": ["raw", "remainder", ""] },
@@ -443,6 +447,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "match": { "type": "object", "additionalProperties": { "type": "string" } },
+        "required_objects": { "type": "array", "items": { "type": "string" } },
+        "strict_records": { "type": "boolean" },
+        "empty_object": { "type": "string" },
+        "unwrap": { "type": "object", "required": ["variants", "tag", "remainder"], "additionalProperties": false, "properties": { "variants": { "type": "array", "minItems": 1, "items": { "type": "string" } }, "tag": { "type": "string", "minLength": 1 }, "remainder": { "type": "string", "minLength": 1 } } },
         "root": { "type": "string", "enum": ["array", "object", ""] },
         "records_path": { "type": "string" },
         "records": { "type": "string", "minLength": 1 },

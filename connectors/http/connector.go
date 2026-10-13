@@ -226,6 +226,11 @@ func (c *Connector) TestConnection(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("connection probe: %w", err)
 	}
+	if probe.Response.StrictRecords {
+		if _, err := response.New(probe.Response).Records(body); err != nil {
+			return fmt.Errorf("connection probe: %w", err)
+		}
+	}
 	if err := response.New(probe.Response).CheckError(body); err != nil {
 		return fmt.Errorf("connection probe: %w", err)
 	}

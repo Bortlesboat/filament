@@ -217,6 +217,12 @@ func (m *Manifest) validateSemantics() error {
 		validateTemplate(&agg, path+".emit_as", r.EmitAs)
 		validateTemplate(&agg, path+".path", r.Path)
 		validateExport(&agg, path, *r)
+		if r.Response.Unwrap != nil && r.Response.Unwrap.Tag == r.Response.Unwrap.Remainder {
+			_ = agg.Addf(path+".response.unwrap", "tag and remainder must name distinct fields")
+		}
+		for field, expected := range r.Response.Match {
+			validateTemplateScopes(&agg, path+".response.match."+field, expected, []string{"config", "parent"})
+		}
 		fieldNames := make(map[string]struct{}, len(r.Fields))
 		for j, f := range r.Fields {
 			fieldPath := fmt.Sprintf("%s.fields[%d]", path, j)
@@ -227,6 +233,20 @@ func (m *Manifest) validateSemantics() error {
 				_ = agg.Addf(fieldPath+".name", "duplicate field name %q", f.Name)
 			}
 			fieldNames[f.Name] = struct{}{}
+			if f.Precision != 0 || f.Scale != 0 {
+				if f.Type != "decimal" || f.Precision < 1 || f.Precision > 38 || f.Scale < 0 || f.Scale > f.Precision {
+					_ = agg.Addf(fieldPath, "precision and scale require a valid decimal128 declaration")
+				}
+			}
+			if f.Value != nil {
+				validateTemplateScopes(&agg, fieldPath+".value", *f.Value, []string{"config", "parent"})
+				if len(f.Tuple) > 0 || len(f.Shape) > 0 || f.Mode != "" || f.MaxString != "" {
+					_ = agg.Addf(fieldPath, "value cannot be combined with another projection")
+				}
+			}
+			if len(f.Tuple) > 0 && (f.Type != "string" || len(f.Shape) > 0 || f.Mode != "" || f.MaxString != "") {
+				_ = agg.Addf(fieldPath, "tuple requires a string field without another projection")
+			}
 			if f.Type == "" {
 				_ = agg.Addf(fieldPath+".type", "is required")
 			}

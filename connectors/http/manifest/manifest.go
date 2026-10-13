@@ -348,6 +348,11 @@ type Resource struct {
 
 // FieldSpec maps a response path to a typed output field.
 type FieldSpec struct {
+	Value     *string  `yaml:"value,omitempty"`
+	Tuple     []string `yaml:"tuple,omitempty"`
+	Precision int      `yaml:"precision,omitempty"`
+	Scale     int      `yaml:"scale,omitempty"`
+
 	MaxString string            `yaml:"max_string,omitempty"` // maximum nonempty string child of an array
 	Name      string            `yaml:"name"`
 	Path      string            `yaml:"path"`
@@ -377,6 +382,11 @@ func (fields *FieldList) UnmarshalYAML(node *yaml.Node) error {
 			field.Type = strings.TrimSuffix(value.Value, "?")
 		} else {
 			type valueSpec struct {
+				Value     *string  `yaml:"value,omitempty"`
+				Tuple     []string `yaml:"tuple,omitempty"`
+				Precision int      `yaml:"precision,omitempty"`
+				Scale     int      `yaml:"scale,omitempty"`
+
 				MaxString string            `yaml:"max_string,omitempty"`
 				Path      string            `yaml:"path"`
 				Type      string            `yaml:"type"`
@@ -388,6 +398,7 @@ func (fields *FieldList) UnmarshalYAML(node *yaml.Node) error {
 			if err := value.Decode(&spec); err != nil {
 				return fmt.Errorf("field %q: %w", name, err)
 			}
+			field.Value, field.Tuple, field.Precision, field.Scale = spec.Value, spec.Tuple, spec.Precision, spec.Scale
 			field.MaxString = spec.MaxString
 			field.Path, field.Type, field.Shape, field.Mode, field.Nullable = spec.Path, spec.Type, spec.Shape, spec.Mode, spec.Nullable
 			if field.Path == "" && len(field.Shape) == 0 {
@@ -408,6 +419,12 @@ type BodySpec struct {
 
 // ResponseSpec configures where records live in the response body.
 type ResponseSpec struct {
+	Match           map[string]string `yaml:"match,omitempty"`
+	RequiredObjects []string          `yaml:"required_objects,omitempty"`
+	StrictRecords   bool              `yaml:"strict_records,omitempty"`
+	EmptyObject     string            `yaml:"empty_object,omitempty"`
+	Unwrap          *UnwrapSpec       `yaml:"unwrap,omitempty"`
+
 	Root        string             `yaml:"root"` // array | object (default object)
 	RecordsPath string             `yaml:"records_path"`
 	Cardinality string             `yaml:"cardinality,omitempty"`  // many (default) | one
@@ -416,6 +433,13 @@ type ResponseSpec struct {
 	Empty       *EmptyResponseSpec `yaml:"empty,omitempty"`
 	Records     string             `yaml:"records,omitempty"`
 	Pagination  *PaginationSpec    `yaml:"pagination,omitempty"`
+}
+
+// UnwrapSpec flattens exactly one tagged object while retaining wrapper fields.
+type UnwrapSpec struct {
+	Variants  []string `yaml:"variants"`
+	Tag       string   `yaml:"tag"`
+	Remainder string   `yaml:"remainder"`
 }
 
 // EmptyResponseSpec recognizes an API's empty-result error by status and an

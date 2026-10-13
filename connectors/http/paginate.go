@@ -21,6 +21,7 @@ import (
 	"github.com/galaxy-io/filament/connectors/http/pagination"
 	"github.com/galaxy-io/filament/connectors/http/request"
 	"github.com/galaxy-io/filament/connectors/http/response"
+	"github.com/galaxy-io/filament/connectors/http/template"
 )
 
 // paginate drives the request → response → records → next-state loop.
@@ -530,6 +531,16 @@ func (c *Connector) sendRecords(
 		_, emitResource = c.enabledResources[res.Name]
 	}
 	for _, rec := range records {
+		for path, expected := range res.Response.Match {
+			want, err := template.Render(expected, c.scopeFor(parent, "", tracker))
+			if err != nil {
+				return n, captured, err
+			}
+			got, _, err := paths.AsString(rec, path)
+			if err != nil || got != want {
+				return n, captured, fmt.Errorf("resource %s response field %s does not match the requested value", res.Name, path)
+			}
+		}
 		if fields := extractor.Capture(rec, res.Capture); fields != nil {
 			// A grandchild often needs both a value from this record and scope
 			// inherited from its parent. Preserve that ancestry without making
@@ -544,7 +555,7 @@ func (c *Connector) sendRecords(
 		if !emitResource {
 			continue
 		}
-		data, projected, err := projectRecord(res, rec, parent)
+		data, projected, err := projectRecord(res, rec, parent, c.creds)
 		if err != nil {
 			return n, captured, err
 		}
