@@ -24,6 +24,7 @@ resources:
   - name: lookup
     path: /lookup
     required_config: [codes, date]
+    restart_on_resume: true
     for_each_config: codes
     primary_key: [code, date]
     query: {code: '{{ parent.codes }}', date: '{{ config.date }}'}

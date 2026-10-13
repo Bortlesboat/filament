@@ -355,6 +355,7 @@
       "additionalProperties": false,
       "properties": {
         "name": { "type": "string", "minLength": 1 },
+        "restart_on_resume": { "type": "boolean" },
         "omit_empty_query": { "type": "boolean" },
         "required_config": { "type": "array", "items": { "type": "string" } },
         "for_each_config": { "type": "string" },
@@ -396,12 +397,14 @@
             "cursor_field": { "type": "string", "minLength": 1 },
             "response_cursor": { "type": "string", "minLength": 1 },
             "start_param": { "type": "string", "minLength": 1 },
-            "inject_into": { "type": "string", "enum": ["query", "body", "header"] },
+            "inject_into": { "type": "string", "enum": ["query", "body", "header", "state"] },
             "initial": { "type": "string" },
             "checkpoint_key": { "type": "string" },
             "comparator": { "type": "string", "enum": ["lex", "numeric", "time"] },
             "overlap_seconds": { "type": "integer", "minimum": 0 },
-            "value_prefix": { "type": "string" }
+            "value_prefix": { "type": "string" },
+            "value_suffix": { "type": "string" },
+            "commit_on_complete": { "type": "boolean" }
           }
         },
         "parent": {

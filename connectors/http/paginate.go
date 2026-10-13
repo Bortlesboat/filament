@@ -98,7 +98,7 @@ func (c *Connector) paginate(
 		}
 
 		checkpointValue := ""
-		if pag != nil && !tokenMode {
+		if pag != nil && !tokenMode && !res.RestartOnResume {
 			checkpointValue = state.Checkpoint()
 		}
 		n, captured, err := c.sendRecords(res, records, sink, parent, checkpointValue, extractor, tracker)
@@ -546,6 +546,20 @@ func (c *Connector) sendRecords(
 			got, _, err := paths.AsString(rec, path)
 			if err != nil || got != want {
 				return n, captured, fmt.Errorf("resource %s response field %s does not match the requested value", res.Name, path)
+			}
+		}
+		if tracker != nil && res.Incremental.CommitOnComplete {
+			field, _ := manifest.IncrementalCursorField(res)
+			value, _, err := paths.AsString(rec, field.Path)
+			if err != nil {
+				return n, captured, err
+			}
+			below, err := tracker.Below(value)
+			if err != nil {
+				return n, captured, err
+			}
+			if below {
+				return n, captured, fmt.Errorf("resource %s returned a record before the incremental lower bound", res.Name)
 			}
 		}
 		if fields := extractor.Capture(rec, res.Capture); fields != nil {

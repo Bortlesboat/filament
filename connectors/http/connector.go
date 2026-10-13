@@ -47,6 +47,7 @@ const (
 // Connector is the generic HTTP connector. Configure with a v1 manifest and
 // per-source credentials, then call Extract.
 type Connector struct {
+	limit        int
 	oauthStore   oauth.Store
 	manifestPath string
 	manifestData []byte
@@ -93,6 +94,7 @@ type resourceRef struct {
 }
 
 type extractOptions struct {
+	Limit                int
 	Observe              filament.SourceObserver
 	EnabledResources     []resourceRef
 	Resources            []string

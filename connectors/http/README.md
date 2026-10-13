@@ -141,3 +141,12 @@ are rejected. Initial browser authorization remains external to Filament.
   top-level full-read resources. It does not create a discoverable parent resource.
 - `omit_empty_query` omits empty optional query values. Existing manifests retain
   their behavior unless this is enabled.
+
+## Completing and resuming scans
+
+- Incremental `inject_into: state` exposes the fixed lower bound under
+  `state.<start_param>`. `value_prefix` and `value_suffix` surround the wire value.
+  `commit_on_complete` withholds the new watermark until the resource finishes.
+  Limited or failed scans replay from the previous committed watermark.
+- `restart_on_resume` disables offset resume and rejects repeated primary keys
+  within a scan. It is appropriate for collections without stable offset cursors.

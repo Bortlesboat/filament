@@ -543,6 +543,9 @@ func (s *Source) PlanResume(_ context.Context, resources []string, prev map[stri
 	}
 	plan := make(map[string]filament.Checkpoint, len(resources))
 	for _, resource := range resources {
+		if res, ok := s.manifestResource(resource); ok && res.RestartOnResume {
+			continue
+		}
 		if res, ok := s.manifestResource(resource); ok && export.Scoped(res) {
 			state, err := s.exportPlanState(res, prev[resource], false)
 			if err != nil {
@@ -636,6 +639,7 @@ func (s *Source) extract(ctx context.Context, sink arrowbatch.Inlet, opts filame
 		reducer: newIncrementalRecordReducer(s, resumeWatermarks),
 	}
 	return s.connector.Extract(ctx, reducingSink, extractOptions{
+		Limit:                opts.Limit,
 		Observe:              opts.Observe,
 		Resources:            s.connectorResources(opts.Resources),
 		EnabledResources:     enabledResources(opts.Selectors),
@@ -1164,7 +1168,7 @@ func (r *incrementalRecordReducer) record(rec record) (record, error) {
 		base := r.source.baseResourceName(rec.Resource)
 		spec, ok = r.source.incrementalResources[base]
 	}
-	if !ok || spec.ResponseCursor != "" {
+	if !ok || spec.ResponseCursor != "" || spec.CommitOnComplete {
 		return rec, nil
 	}
 	checkpointKey := spec.DurableCheckpointKey()
