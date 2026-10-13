@@ -168,7 +168,15 @@ func (c *Connector) Configure(ctx context.Context) error {
 	// from config (`base_url: "{{ config.host }}"`) instead of pinning one
 	// cloud. Literal base URLs pass through untouched — Render short-circuits
 	// when there is no template.
-	baseURL, err := template.Render(m.Connection.BaseURL, template.Scope{Config: c.creds, Env: c.env})
+	baseTemplate := m.Connection.BaseURL
+	if m.Connection.BaseURLField != "" {
+		var ok bool
+		baseTemplate, ok = m.Connection.BaseURLs[c.creds[m.Connection.BaseURLField]]
+		if !ok {
+			return fmt.Errorf("invalid base URL selection for %s", m.Connection.BaseURLField)
+		}
+	}
+	baseURL, err := template.Render(baseTemplate, template.Scope{Config: c.creds, Env: c.env})
 	if err != nil {
 		return fmt.Errorf("render base_url: %w", err)
 	}

@@ -103,6 +103,13 @@ type ConfigCondition struct {
 // ConfigSpec declares one user-facing connector configuration field. Enum is
 // the ordered set of choices for enum and list fields.
 type ConfigSpec struct {
+	Pattern  string   `yaml:"pattern,omitempty"`
+	Format   string   `yaml:"format,omitempty"`
+	Minimum  *int     `yaml:"minimum,omitempty"`
+	Maximum  *int     `yaml:"maximum,omitempty"`
+	Requires []string `yaml:"requires,omitempty"`
+	Before   string   `yaml:"before,omitempty"`
+
 	VisibleWhen *ConfigCondition  `yaml:"visible_when,omitempty"`
 	Type        string            `yaml:"type"`
 	Required    bool              `yaml:"required,omitempty"`
@@ -164,6 +171,8 @@ type ScopeSpec struct {
 
 // Connection configures the base URL, auth, rate limit, and shared headers.
 type Connection struct {
+	BaseURLField   string            `yaml:"base_url_field,omitempty"`
+	BaseURLs       map[string]string `yaml:"base_urls,omitempty"`
 	BaseURL        string            `yaml:"base_url"`
 	Auth           AuthSpec          `yaml:"auth"`
 	RateLimit      RateLimit         `yaml:"rate_limit"`
@@ -315,6 +324,9 @@ type DynamicLimit struct {
 // Resource declares one extractable endpoint and how to page, decode, and
 // incrementally track it.
 type Resource struct {
+	OmitEmptyQuery bool      `yaml:"omit_empty_query,omitempty"`
+	RequiredConfig []string  `yaml:"required_config,omitempty"`
+	ForEachConfig  string    `yaml:"for_each_config,omitempty"`
 	Name           string    `yaml:"name"`
 	EmitAs         string    `yaml:"emit_as,omitempty"`
 	Path           string    `yaml:"path"`
@@ -460,6 +472,9 @@ type ErrorSpec struct {
 
 // PaginationSpec configures how list endpoints are paged.
 type PaginationSpec struct {
+	Start        int    `yaml:"start,omitempty"`
+	PageSizeFrom string `yaml:"page_size_from,omitempty"`
+
 	Strict bool   `yaml:"strict,omitempty"` // require an explicit cursor envelope, including terminal pages
 	Type   string `yaml:"type"`             // cursor | offset | page | link_header | next_url | none
 
@@ -551,19 +566,22 @@ func (p *PaginationSpec) UnmarshalYAML(node *yaml.Node) error {
 		p.Type, p.CursorPath, p.InjectInto, p.CursorParam, p.HasMorePath, p.AllowNullTerminates = "cursor", spec.Response, target, param, spec.More, spec.NullTerminates
 	case "offset":
 		var spec struct {
-			More     string `yaml:"more"`
-			Offset   string `yaml:"offset"`
-			Limit    string `yaml:"limit"`
-			PageSize int    `yaml:"page_size"`
+			Start        int    `yaml:"start"`
+			PageSizeFrom string `yaml:"page_size_from"`
+			More         string `yaml:"more"`
+			Offset       string `yaml:"offset"`
+			Limit        string `yaml:"limit"`
+			PageSize     int    `yaml:"page_size"`
 		}
 		if err := value.Decode(&spec); err != nil {
 			return err
 		}
 		offsetTarget, offsetParam := paginationTarget(spec.Offset)
 		limitTarget, limitParam := paginationTarget(spec.Limit)
-		if offsetTarget != limitTarget || (offsetTarget != "query" && offsetTarget != "body") {
-			return fmt.Errorf("offset pagination fields must share a query or body target")
+		if offsetTarget != limitTarget || (offsetTarget != "query" && offsetTarget != "body" && offsetTarget != "state") {
+			return fmt.Errorf("offset pagination fields must share a query, body, or state target")
 		}
+		p.Start, p.PageSizeFrom = spec.Start, spec.PageSizeFrom
 		p.HasMorePath = spec.More
 		p.Type, p.OffsetParam, p.LimitParam, p.PageSize, p.OffsetInjectInto = "offset", offsetParam, limitParam, spec.PageSize, offsetTarget
 	case "page":
@@ -594,7 +612,7 @@ func (p *PaginationSpec) UnmarshalYAML(node *yaml.Node) error {
 // targets. Only known injection targets act as prefixes, so a dotted query
 // parameter name like pagination.page passes through verbatim.
 func paginationTarget(field string) (string, string) {
-	for _, target := range []string{"query", "body", "header"} {
+	for _, target := range []string{"query", "body", "header", "state"} {
 		if param, ok := strings.CutPrefix(field, target+"."); ok {
 			return target, param
 		}

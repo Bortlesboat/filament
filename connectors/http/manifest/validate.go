@@ -2,6 +2,7 @@ package manifest
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -174,6 +175,30 @@ func (m *Manifest) validateSemantics() error {
 	validateVersionHeaders(&agg, m)
 	validateAuthParams(&agg, "connection.auth", m.Connection.Auth.Params)
 	validateManagedAuth(&agg, m, m.Connection.Auth)
+	for name, spec := range m.Config {
+		if spec.Pattern != "" {
+			if _, err := regexp.Compile(spec.Pattern); err != nil {
+				_ = agg.Addf("config."+name+".pattern", "invalid regular expression")
+			}
+		}
+		if spec.Minimum != nil && spec.Maximum != nil && *spec.Minimum > *spec.Maximum {
+			_ = agg.Addf("config."+name, "minimum exceeds maximum")
+		}
+		for _, key := range spec.Requires {
+			if _, ok := m.Config[key]; !ok {
+				_ = agg.Addf("config."+name+".requires", "unknown config field %s", key)
+			}
+		}
+		if spec.Before != "" && (spec.Format != "date" || m.Config[spec.Before].Format != "date") {
+			_ = agg.Addf("config."+name+".before", "requires date fields")
+		}
+	}
+	if (m.Connection.BaseURLField == "") != (len(m.Connection.BaseURLs) == 0) {
+		_ = agg.Addf("connection.base_urls", "base_url_field and base_urls must be supplied together")
+	}
+	for key, value := range m.Connection.BaseURLs {
+		validateTemplateScopes(&agg, "connection.base_urls."+key, value, template.AuthScopes)
+	}
 
 	names := make(map[string]struct{}, len(m.Resources))
 	byName := make(map[string]*Resource, len(m.Resources))
@@ -222,6 +247,22 @@ func (m *Manifest) validateSemantics() error {
 		}
 		for field, expected := range r.Response.Match {
 			validateTemplateScopes(&agg, path+".response.match."+field, expected, []string{"config", "parent"})
+		}
+		for _, key := range r.RequiredConfig {
+			if _, ok := m.Config[key]; !ok {
+				_ = agg.Addf(path+".required_config", "unknown config field %s", key)
+			}
+		}
+		if r.ForEachConfig != "" {
+			if _, ok := m.Config[r.ForEachConfig]; !ok {
+				_ = agg.Addf(path+".for_each_config", "unknown config field")
+			}
+			if r.Parent != nil || r.Incremental != nil || r.Mode != "paginated" {
+				_ = agg.Addf(path+".for_each_config", "requires a top-level full-read paginated resource")
+			}
+		}
+		if r.Pagination.PageSizeFrom != "" && m.Config[r.Pagination.PageSizeFrom].Type != "int" {
+			_ = agg.Addf(path+".pagination", "page_size_from must name an integer config field")
 		}
 		fieldNames := make(map[string]struct{}, len(r.Fields))
 		for j, f := range r.Fields {

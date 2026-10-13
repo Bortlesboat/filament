@@ -125,3 +125,19 @@ are rejected. Initial browser authorization remains external to Filament.
 - Decimal fields can declare `precision` and `scale` for exact decimal128 output.
   Out-of-range or overprecise values fail instead of being rounded. Existing
   decimal declarations without precision keep their text representation.
+
+## Request configuration and resource selection
+
+- `connection.base_url_field` selects a key from `connection.base_urls`. This
+  supports fixed environment endpoints while retaining an existing config field.
+- Config fields support `pattern`, `format: date`, integer `minimum` and `maximum`,
+  `requires`, and date-field `before` constraints. Resources can require extra
+  fields through `required_config` when selected.
+- Offset pagination supports `start`, `page_size_from`, and `state` targets.
+  For example, `offset: state.offset` and `limit: state.page_size` expose numeric
+  values to request templates instead of adding separate query parameters.
+- `for_each_config` makes one read per distinct nonempty comma-separated config
+  value. The current value is available as `parent.<config_field>`. This is for
+  top-level full-read resources. It does not create a discoverable parent resource.
+- `omit_empty_query` omits empty optional query values. Existing manifests retain
+  their behavior unless this is enabled.

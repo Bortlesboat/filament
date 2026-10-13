@@ -214,6 +214,13 @@ func (c *Connector) fetchPage(
 ) (*http.Response, []byte, error) {
 	build := func(ctx context.Context) (*http.Request, error) {
 		scope := c.scopeFor(parent, state.Cursor, tracker)
+		if res.Pagination.OffsetInjectInto == "state" {
+			if scope.State == nil {
+				scope.State = map[string]string{}
+			}
+			scope.State[res.Pagination.OffsetParam] = strconv.Itoa(state.Offset)
+			scope.State[res.Pagination.LimitParam] = strconv.Itoa(res.Pagination.PageSize)
+		}
 
 		// Render once so body-merge sees the templated body (parent.*,
 		// config.*, state.* placeholders already substituted).

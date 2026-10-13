@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"strconv"
+	"strings"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -148,6 +150,35 @@ func (c *Connector) extractChildResource(ctx context.Context, res manifest.Resou
 // restart pagination because a resource-wide cursor cannot be applied to each
 // parent independently.
 func (c *Connector) extractResource(ctx context.Context, res manifest.Resource, sink recordSink, parent Capture) error {
+	if res.ForEachConfig != "" {
+		key := res.ForEachConfig
+		res.ForEachConfig = ""
+		seen := map[string]bool{}
+		for _, value := range strings.Split(c.creds[key], ",") {
+			value = strings.TrimSpace(value)
+			if value == "" || seen[value] {
+				continue
+			}
+			seen[value] = true
+			scope := maps.Clone(parent)
+			if scope == nil {
+				scope = Capture{}
+			}
+			scope[key] = value
+			if err := c.extractResource(ctx, res, sink, scope); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if res.Pagination.PageSizeFrom != "" {
+		n, err := strconv.Atoi(c.creds[res.Pagination.PageSizeFrom])
+		if err != nil || n <= 0 {
+			return fmt.Errorf("invalid page size in %s", res.Pagination.PageSizeFrom)
+		}
+		res.Pagination.PageSize = n
+	}
+
 	if res.Mode == "export" {
 		return c.runExport(ctx, res, sink, nil)
 	}
