@@ -242,6 +242,7 @@ func (a *AuthSpec) UnmarshalYAML(node *yaml.Node) error {
 			TokenURL     string            `yaml:"token_url"`
 			ClientID     string            `yaml:"client_id"`
 			ClientSecret string            `yaml:"client_secret"`
+			ClientAuth   string            `yaml:"client_auth"`
 			Scope        string            `yaml:"scope"`
 			GrantType    string            `yaml:"grant_type"`
 			RefreshToken string            `yaml:"refresh_token"`
@@ -254,6 +255,7 @@ func (a *AuthSpec) UnmarshalYAML(node *yaml.Node) error {
 		a.Params["token_url"] = spec.TokenURL
 		a.Params["client_id"] = referenceTemplate(spec.ClientID)
 		a.Params["client_secret"] = referenceTemplate(spec.ClientSecret)
+		a.Params["client_auth"] = spec.ClientAuth
 		a.Params["scope"] = spec.Scope
 		a.Params["grant_type"] = spec.GrantType
 		a.Params["refresh_token"] = referenceTemplate(spec.RefreshToken)

@@ -147,8 +147,9 @@ without an external dependency.
 ## OAuth tokens
 
 The root `oauth` package handles client credentials and refresh-token grants.
-It refreshes on demand and exposes `Token(ctx)` to Go drivers. Browser
-authorization and callback handlers are outside this package.
+It refreshes on demand and exposes `Token(ctx)` to Go drivers. HTTP manifests
+use the same implementation. Browser authorization and callback handlers are
+outside this package.
 
 Create an encrypted token store with an existing Postgres or SQLite secret
 provider. Give each authorization a stable ID scoped to its tenant. Connections
@@ -192,7 +193,10 @@ token.SetAuthHeader(req)
 
 A future authorization-code callback can pass the issued tokens to the same
 `store.Set` method. A driver can depend on the small `oauth.TokenSource`
-interface. The connection API and worker protocol do not provision standalone
+interface. For an HTTP source, call `source.SetOAuthStore(store)` before
+`Configure` or `TestConnection`. This is an explicit Go integration hook.
+
+The connection API and worker protocol do not provision standalone
 OAuth credential IDs. A driver can implement `oauth/secrets.Configurable` to
 identify its saved refresh-token field and an authorization-settings fingerprint.
 The runner binds that managed secret through `oauth/secrets.Bind` before source
@@ -236,7 +240,8 @@ and local storage cannot share a transaction.
 Check `errors.Is(err, oauth.ErrReauthorizationRequired)` for an expired or revoked
 refresh grant. Endpoint errors expose HTTP status and an allowlisted OAuth code,
 without provider descriptions or raw responses. Token requests do not retry
-automatically.
+automatically. The HTTP adapter's optional retry policy accepts explicit
+temporary rejections and avoids retrying ambiguous transport failures.
 
 Call `store.Delete(ctx)` when removing an authorization. This removes local
 tokens only. Provider-side revocation remains a separate operation. Token values
