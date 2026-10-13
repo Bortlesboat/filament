@@ -398,6 +398,36 @@ type Secret struct {
 	Meta   map[string]string
 }
 
+// SecretCoordinationStore coordinates external secret managers without storing
+// credential material. Lease expiry uses the database clock. All writes are
+// fenced by the owner and expiry, including after a process restart.
+type SecretCoordinationStore interface {
+	AcquireSecretLease(context.Context, SecretLeaseKey, string, time.Duration) (SecretVersionState, bool, error)
+	SaveSecretVersion(context.Context, SecretLeaseKey, string, SecretVersionState) error
+	ReleaseSecretLease(context.Context, SecretLeaseKey, string) error
+}
+
+// SecretLeaseKey identifies one tenant's secret in one configured backend.
+type SecretLeaseKey struct {
+	Tenant TenantID
+	Scope  string
+	Ref    string
+}
+
+// SecretVersionState contains only coordination metadata, never token values.
+// Pending survives lease expiry: an interrupted exchange must not be repeated.
+// Deleted is a tombstone so stale workers cannot resurrect removed credentials.
+type SecretVersionState struct {
+	Version string
+	Pending bool
+	Deleted bool
+}
+
+var (
+	ErrSecretLeaseLost       = errors.New("secret update ownership expired or changed")
+	ErrSecretUpdateUncertain = errors.New("secret update was interrupted; supply fresh credentials through connection settings")
+)
+
 // ConnectionSecretPrefix namespaces the secret refs the connection API mints on
 // a tenant's behalf: connections/<tenant>/<connID>/<field>/v<version>.
 const ConnectionSecretPrefix = "filament/"
