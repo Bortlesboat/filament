@@ -222,7 +222,7 @@ rotating tokens. Other integrations can implement `oauth.Store` or use
 callers. A conditional write after concurrent exchanges is insufficient.
 
 For cloud stores, an interrupted update remains pending and blocks another
-exchange. Recover by supplying fresh authorization under a new managed reference.
+exchange. Supply fresh authorization through connection settings to recover.
 Do not write Filament-managed secrets outside the coordinated provider. A cloud write and an OAuth exchange
 cannot be committed as one database transaction.
 

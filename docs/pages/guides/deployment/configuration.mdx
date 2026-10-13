@@ -117,8 +117,9 @@ Do not edit Filament-managed secrets directly in the cloud console. Replace
 credentials through connection settings so the version record is updated.
 
 An interrupted exchange or ambiguous cloud write blocks further automatic
-refreshes for that reference. Supply fresh credentials under a new managed
-reference to recover, then retire the old reference.
+refreshes for that reference. Supply fresh credentials through connection
+settings to recover. The replacement creates a new managed reference and retires
+the old reference.
 Deleting a connection leaves a coordination tombstone to prevent stale workers
 from recreating its secret. Failed cloud deletion can be retried.
 
