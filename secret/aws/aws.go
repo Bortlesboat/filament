@@ -16,9 +16,11 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"github.com/galaxy-io/filament"
 )
@@ -41,9 +43,11 @@ type API interface {
 
 // Provider stores secrets in AWS Secrets Manager.
 type Provider struct {
-	client API
-	prefix string
-	region string
+	client    API
+	prefix    string
+	region    string
+	partition string
+	account   string
 }
 
 // Option configures a Provider.
@@ -53,6 +57,13 @@ type Option func(*Provider)
 // Secrets Manager name. A slash always separates the prefix from the rest of
 // the name, so a trailing one is trimmed.
 func WithPrefix(prefix string) Option { return func(p *Provider) { p.prefix = prefix } }
+
+// WithIdentity supplies the namespace of an explicitly injected client's
+// credentials. It is required for coordinated updates when using New directly.
+// NewFromConfig discovers this identity through STS instead.
+func WithIdentity(partition, account, region string) Option {
+	return func(p *Provider) { p.partition, p.account, p.region = partition, account, region }
+}
 
 // New constructs a provider from an explicit Secrets Manager API. Use this to
 // inject a preconfigured client (custom region, credentials, or a test fake).
@@ -67,7 +78,7 @@ func New(client API, opts ...Option) *Provider {
 
 // NewFromConfig loads the default AWS config chain (env, shared config,
 // IAM role) and returns a Secrets Manager–backed provider. Fails fast when
-// no region is configured.
+// no region is configured or the caller identity cannot be resolved.
 func NewFromConfig(ctx context.Context, opts ...Option) (*Provider, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
@@ -78,7 +89,31 @@ func NewFromConfig(ctx context.Context, opts ...Option) (*Provider, error) {
 	}
 	p := New(secretsmanager.NewFromConfig(cfg), opts...)
 	p.region = cfg.Region
+	if err := p.resolveIdentity(ctx, sts.NewFromConfig(cfg)); err != nil {
+		return nil, err
+	}
 	return p, nil
+}
+
+type identityAPI interface {
+	GetCallerIdentity(context.Context, *sts.GetCallerIdentityInput, ...func(*sts.Options)) (*sts.GetCallerIdentityOutput, error)
+}
+
+func (p *Provider) resolveIdentity(ctx context.Context, client identityAPI) error {
+	identity, err := client.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	if err != nil {
+		return fmt.Errorf("secret/aws: resolve caller identity: %w", err)
+	}
+	if identity == nil {
+		return errors.New("secret/aws: missing caller identity")
+	}
+	caller, err := arn.Parse(aws.ToString(identity.Arn))
+	account := aws.ToString(identity.Account)
+	if err != nil || caller.Partition == "" || account == "" || caller.AccountID != account {
+		return errors.New("secret/aws: invalid caller identity")
+	}
+	p.partition, p.account = caller.Partition, account
+	return nil
 }
 
 // Name returns the provider identifier.
@@ -113,7 +148,10 @@ func (p *Provider) Read(ctx context.Context, ref string) (filament.Secret, error
 
 // SecretScope separates coordination for configured cloud namespaces.
 func (p *Provider) SecretScope() string {
-	return "aws-secrets-manager/" + p.region + "/" + cmp.Or(p.prefix, defaultPrefix)
+	if p.partition == "" || p.account == "" || p.region == "" {
+		return ""
+	}
+	return "aws-secrets-manager/" + p.partition + "/" + p.account + "/" + p.region + "/" + cmp.Or(p.prefix, defaultPrefix)
 }
 
 // ReadVersion reads an immutable version, or current when version is empty.

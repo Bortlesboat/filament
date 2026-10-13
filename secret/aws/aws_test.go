@@ -2,11 +2,13 @@ package aws
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	sdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"github.com/galaxy-io/filament"
 )
@@ -67,5 +69,80 @@ func TestImmutableVersionsKeepSecretName(t *testing.T) {
 				t.Fatal("exact read used mutable stage")
 			}
 		})
+	}
+}
+
+type fakeIdentity struct {
+	output *sts.GetCallerIdentityOutput
+	err    error
+}
+
+func (f fakeIdentity) GetCallerIdentity(context.Context, *sts.GetCallerIdentityInput, ...func(*sts.Options)) (*sts.GetCallerIdentityOutput, error) {
+	return f.output, f.err
+}
+
+func TestCoordinationScopeUsesCloudNamespace(t *testing.T) {
+	scope := func(partition, account, region, prefix, role string) string {
+		t.Helper()
+		p := New(&fakeAPI{}, WithPrefix(prefix))
+		p.region = region
+		err := p.resolveIdentity(t.Context(), fakeIdentity{output: &sts.GetCallerIdentityOutput{
+			Account: sdk.String(account),
+			Arn:     sdk.String("arn:" + partition + ":sts::" + account + ":assumed-role/" + role),
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.SecretScope()
+	}
+	base := scope("aws", "111111111111", "us-east-1", "", "worker/session-one")
+	if base != "aws-secrets-manager/aws/111111111111/us-east-1/filament" {
+		t.Fatalf("scope = %q", base)
+	}
+	if other := scope("aws", "111111111111", "us-east-1", "filament/", "server/session-two"); other != base {
+		t.Fatal("roles, sessions, or equivalent prefixes split coordination")
+	}
+	for name, other := range map[string]string{
+		"account":   scope("aws", "222222222222", "us-east-1", "", "worker/session-one"),
+		"partition": scope("aws-us-gov", "111111111111", "us-east-1", "", "worker/session-one"),
+		"region":    scope("aws", "111111111111", "us-west-2", "", "worker/session-one"),
+		"prefix":    scope("aws", "111111111111", "us-east-1", "other", "worker/session-one"),
+	} {
+		if other == base {
+			t.Fatalf("%s shares coordination", name)
+		}
+	}
+	explicit := New(&fakeAPI{}, WithIdentity("aws", "111111111111", "us-east-1"))
+	if explicit.SecretScope() != base {
+		t.Fatal("explicit identity differs from discovered identity")
+	}
+}
+
+func TestCoordinationRequiresResolvedIdentity(t *testing.T) {
+	unavailable := errors.New("STS unavailable")
+	for name, client := range map[string]fakeIdentity{
+		"unavailable":        {err: unavailable},
+		"empty":              {},
+		"missing account":    {output: &sts.GetCallerIdentityOutput{Arn: sdk.String("arn:aws:iam::111111111111:root")}},
+		"invalid ARN":        {output: &sts.GetCallerIdentityOutput{Account: sdk.String("111111111111"), Arn: sdk.String("invalid")}},
+		"mismatched account": {output: &sts.GetCallerIdentityOutput{Account: sdk.String("222222222222"), Arn: sdk.String("arn:aws:iam::111111111111:root")}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := New(&fakeAPI{})
+			p.region = "us-east-1"
+			err := p.resolveIdentity(t.Context(), client)
+			if err == nil {
+				t.Fatal("accepted unresolved identity")
+			}
+			if client.err != nil && !errors.Is(err, unavailable) {
+				t.Fatal("lost discovery error")
+			}
+			if p.SecretScope() != "" {
+				t.Fatal("unresolved identity can coordinate")
+			}
+		})
+	}
+	if New(&fakeAPI{}, WithIdentity("aws", "111111111111", "")).SecretScope() != "" {
+		t.Fatal("missing region can coordinate")
 	}
 }

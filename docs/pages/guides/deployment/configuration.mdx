@@ -92,7 +92,11 @@ a multi-key rotation mechanism.
 </Warning>
 
 The AWS provider loads credentials through the standard AWS SDK chain. It
-stores each Filament secret as a JSON envelope in AWS Secrets Manager.
+stores each Filament secret as a JSON envelope in AWS Secrets Manager. Startup
+calls [STS GetCallerIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetCallerIdentity.html)
+to identify the AWS account and partition. Coordination separates secrets by
+partition, account, region, and prefix. Workloads must be able to reach STS as
+well as Secrets Manager. Startup fails if identity discovery fails.
 
 The GCP provider loads Application Default Credentials and uses regional Secret
 Manager secrets. Filament refs are mapped to deterministic
