@@ -249,6 +249,11 @@ func (m *Manifest) validateSemantics() error {
 				_ = agg.Addf(fieldPath+".shape", "shape cannot be combined with remainder mode")
 			}
 		}
+		for _, override := range r.FieldOverrides {
+			if _, ok := fieldNames[override.Name]; !ok {
+				_ = agg.Addf(path+".field_overrides", "unknown field %q", override.Name)
+			}
+		}
 		for _, pk := range r.PrimaryKey {
 			if len(r.Fields) > 0 {
 				if _, ok := fieldNames[pk]; !ok {
@@ -778,6 +783,14 @@ func (m *Manifest) normalizeResourceFields(r *Resource) {
 			inherited = append(inherited, m.FieldSets[name]...)
 		}
 		r.Fields = append(inherited, r.Fields...)
+	}
+	for _, override := range r.FieldOverrides {
+		for i, field := range r.Fields {
+			if field.Name == override.Name {
+				r.Fields[i] = override
+				break
+			}
+		}
 	}
 	if len(r.ExcludeFields) > 0 {
 		excluded := make(map[string]struct{}, len(r.ExcludeFields))

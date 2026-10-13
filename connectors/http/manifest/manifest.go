@@ -53,6 +53,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -63,6 +64,7 @@ const SupportedVersion = 1
 
 // Manifest is the root document describing one HTTP API connector.
 type Manifest struct {
+	Includes     []string              `yaml:"includes,omitempty"`
 	Version      int                   `yaml:"version"`
 	Name         string                `yaml:"name"`
 	DisplayName  string                `yaml:"display_name,omitempty"`
@@ -313,15 +315,16 @@ type DynamicLimit struct {
 // Resource declares one extractable endpoint and how to page, decode, and
 // incrementally track it.
 type Resource struct {
-	Name          string    `yaml:"name"`
-	EmitAs        string    `yaml:"emit_as,omitempty"`
-	Path          string    `yaml:"path"`
-	Method        string    `yaml:"method"`
-	Mode          string    `yaml:"mode"` // paginated | stream (default paginated)
-	PrimaryKey    []string  `yaml:"primary_key"`
-	Fields        FieldList `yaml:"fields,omitempty"`
-	UseFields     []string  `yaml:"use_fields,omitempty"`
-	ExcludeFields []string  `yaml:"exclude_fields,omitempty"`
+	Name           string    `yaml:"name"`
+	EmitAs         string    `yaml:"emit_as,omitempty"`
+	Path           string    `yaml:"path"`
+	Method         string    `yaml:"method"`
+	Mode           string    `yaml:"mode"` // paginated | stream (default paginated)
+	PrimaryKey     []string  `yaml:"primary_key"`
+	Fields         FieldList `yaml:"fields,omitempty"`
+	FieldOverrides FieldList `yaml:"field_overrides,omitempty"`
+	UseFields      []string  `yaml:"use_fields,omitempty"`
+	ExcludeFields  []string  `yaml:"exclude_fields,omitempty"`
 	// Records is concise syntax for response.root + response.records_path.
 	// "$" means an array at the document root; "$.data.items" selects a path.
 	Records string `yaml:"records,omitempty"`
@@ -639,11 +642,12 @@ type StreamSpec struct {
 
 // Load reads, parses, validates, and version-checks a manifest at path.
 func Load(path string) (*Manifest, error) {
-	data, err := os.ReadFile(path)
+	root, err := os.OpenRoot(filepath.Dir(path))
 	if err != nil {
 		return nil, fmt.Errorf("read manifest: %w", err)
 	}
-	return Parse(data)
+	defer root.Close()
+	return LoadFS(root.FS(), filepath.Base(path))
 }
 
 // Parse validates + decodes a YAML manifest byte slice. Two-phase validation:
@@ -660,6 +664,9 @@ func Parse(data []byte) (*Manifest, error) {
 	dec.KnownFields(true)
 	if err := dec.Decode(&m); err != nil {
 		return nil, fmt.Errorf("parse manifest: %w", err)
+	}
+	if len(m.Includes) > 0 {
+		return nil, fmt.Errorf("manifest includes require Load or LoadFS with a filesystem")
 	}
 	if m.Version != SupportedVersion {
 		return nil, fmt.Errorf("unsupported manifest version %d (want %d)", m.Version, SupportedVersion)
