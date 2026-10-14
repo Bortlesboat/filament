@@ -7,11 +7,11 @@ dark_logo_url: "https://quickbooks.intuit.com/etc/designs/quickbooks/images/favi
 light_logo_url: "https://quickbooks.intuit.com/etc/designs/quickbooks/images/favicon.ico"
 api_version: "v3"
 config:
-  realm_id: {"type": "string", "required": true, "pattern": "^[0-9]+$", "help": "QuickBooks company ID returned during OAuth authorization."}
-  access_token: {"type": "secret", "default": "", "help": "OAuth access token. Required unless all refresh credentials are supplied."}
-  client_id: {"type": "string", "default": "", "help": "Intuit application client ID. Set with client_secret and refresh_token."}
-  client_secret: {"type": "secret", "default": "", "help": "Intuit application client secret for the selected environment."}
-  refresh_token: {"type": "secret", "default": "", "help": "Initial OAuth refresh token. Saved connections persist rotated tokens in the configured secret manager."}
+  client_id: {"order": 1, "type": "string", "default": "", "help": "Intuit application client ID. Set with client_secret and refresh_token."}
+  client_secret: {"order": 2, "type": "secret", "default": "", "help": "Intuit application client secret for the selected environment."}
+  realm_id: {"order": 3, "type": "string", "required": true, "pattern": "^[0-9]+$", "help": "QuickBooks company ID returned during OAuth authorization."}
+  access_token: {"order": 4, "type": "secret", "default": "", "help": "OAuth access token. Required unless all refresh credentials are supplied."}
+  refresh_token: {"order": 5, "type": "secret", "default": "", "help": "Initial OAuth refresh token. Saved connections persist rotated tokens in the configured secret manager."}
   environment:
     type: "enum"
     enum: ["production", "sandbox"]

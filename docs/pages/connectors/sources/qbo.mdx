@@ -13,10 +13,10 @@ The `qbo` alias resolves to `qbo@v3`. Live company reads have not been validated
 
 | Field | Scope | Default | Description |
 |---|---|---|---|
-| `realm_id` | Connection | | Required. QuickBooks company ID returned during OAuth authorization. |
-| `access_token` | Connection | | Secret. Required unless automatic refresh credentials are supplied. OAuth access token with the `com.intuit.quickbooks.accounting` scope. |
 | `client_id` | Connection | | Intuit application client ID. Set all three refresh fields together. |
 | `client_secret` | Connection | | Secret. Intuit application client secret for the selected environment. |
+| `realm_id` | Connection | | Required. QuickBooks company ID returned during OAuth authorization. |
+| `access_token` | Connection | | Secret. Required unless automatic refresh credentials are supplied. OAuth access token with the `com.intuit.quickbooks.accounting` scope. |
 | `refresh_token` | Connection | | Secret. Initial refresh token obtained through Intuit authorization. Filament saves rotated tokens automatically for saved connections. |
 | `environment` | Connection | `production` | `production` or `sandbox`. Credentials and company must match the environment. |
 | `minor_version` | Connection | | Optional numeric Intuit minor version. Empty uses Intuit's default. |
@@ -27,12 +27,66 @@ The `qbo` alias resolves to `qbo@v3`. Live company reads have not been validated
 | `exchange_rate_currencies` | Pipeline | | Pipeline field required for `exchange_rates`. Comma-separated uppercase currency codes such as `EUR,GBP`. |
 | `exchange_rate_date` | Pipeline | | Pipeline field required for `exchange_rates`. YYYY-MM-DD effective date. |
 
-Authorize an Intuit application for the company and accounting scope using
-Intuit's OAuth flow or OAuth Playground. For automatic refresh, save the company
-ID, environment, client ID, client secret, and refresh token in the connection.
-An access token is optional. Filament does not host the initial authorization
-callback. Access-token-only connections remain supported and require manual
-renewal. Their connection test reads CompanyInfo.
+### Get credentials with the OAuth Playground
+
+Use your own Intuit application. The Developer Portal provides the app's client
+ID and client secret. The OAuth Playground helps you authorize a company and
+exchange the authorization code for tokens. Filament does not host the initial
+authorization callback.
+
+1. Sign in to the [Intuit Developer Portal](https://developer.intuit.com/) and
+   create or select an app with access to the QuickBooks Online Accounting API.
+2. Open the app's **Keys & OAuth** or **Keys & Credentials** section. Copy the
+   client ID and client secret for your environment. Use development credentials
+   for a sandbox company and production credentials for a live company. Complete
+   Intuit's production setup requirements before connecting a live company.
+3. Check the app's redirect URI settings for the selected environment. The
+   Playground redirect URI may already be registered by default. Add it only
+   if it is missing.
+
+   ```text
+   https://developer.intuit.com/v2/OAuth2Playground/RedirectUrl
+   ```
+
+4. Open the [OAuth 2.0 Playground](https://developer.intuit.com/app/developer/playground).
+   Select your app and environment or enter the matching app credentials. Use
+   the registered redirect URI and select the `com.intuit.quickbooks.accounting`
+   scope.
+5. Start authorization, sign in to QuickBooks, select the company, and approve
+   access. After the redirect, copy the `realmId`. This is the company ID that
+   Filament calls `realm_id`.
+6. Complete the Playground's code exchange step to obtain an access token and
+   a refresh token. The authorization code is temporary and single-use. It is
+   not an access token or refresh token and cannot be entered in either field.
+7. Create a saved `qbo` connection in Filament using the values below.
+
+| Filament field | Value |
+|---|---|
+| `client_id` | The client ID from the app's credential page |
+| `client_secret` | The matching client secret from the app's credential page |
+| `realm_id` | The `realmId` returned after company authorization |
+| `access_token` | Leave empty when using automatic refresh |
+| `refresh_token` | The refresh token returned by the code exchange |
+| `environment` | `sandbox` or `production`, matching the app credentials and company |
+
+Leave `access_token` empty when using automatic refresh. Filament obtains an
+access token on the first read and saves replacement tokens for subsequent runs.
+Store the client secret and refresh token as managed secrets on the saved
+connection. Once Filament manages the refresh token, avoid refreshing the same
+token in the Playground or another application.
+
+If you perform the code exchange yourself, send a form-encoded POST to
+`https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer`. Use HTTP Basic
+authentication with the client ID and client secret. Include
+`grant_type=authorization_code`, `code`, and the exact `redirect_uri` used for
+authorization. Save the returned refresh token, not the authorization code.
+The `realmId` comes from the authorization redirect rather than this exchange.
+
+See Intuit's [app credential guide](https://developer.intuit.com/app/developer/qbo/docs/get-started/get-client-id-and-client-secret)
+and [OAuth Playground guide](https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization/oauth-2.0-playground).
+
+Access-token-only connections remain supported and require manual renewal.
+Their connection test reads CompanyInfo.
 
 ### Automatic token refresh
 
