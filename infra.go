@@ -424,7 +424,9 @@ type SecretVersionState struct {
 }
 
 var (
-	ErrSecretLeaseLost       = errors.New("secret update ownership expired or changed")
+	// ErrSecretLeaseLost indicates that an update no longer owns its lease.
+	ErrSecretLeaseLost = errors.New("secret update ownership expired or changed")
+	// ErrSecretUpdateUncertain indicates that an interrupted update needs fresh credentials.
 	ErrSecretUpdateUncertain = errors.New("secret update was interrupted; supply fresh credentials through connection settings")
 )
 

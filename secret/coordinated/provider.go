@@ -32,13 +32,18 @@ type Provider struct {
 	store   filament.SecretCoordinationStore
 }
 
+// New wraps a versioned backend with datastore-backed secret coordination.
 func New(backend Versioned, store filament.SecretCoordinationStore) (*Provider, error) {
 	if backend == nil || store == nil || backend.SecretScope() == "" {
 		return nil, errors.New("external secrets require a versioned provider and datastore coordination")
 	}
 	return &Provider{backend: backend, store: store}, nil
 }
+
+// Name returns the underlying backend's name.
 func (p *Provider) Name() string { return p.backend.Name() }
+
+// Close closes the underlying backend if it supports closing.
 func (p *Provider) Close() error {
 	if c, ok := p.backend.(io.Closer); ok {
 		return c.Close()
@@ -181,6 +186,7 @@ func (p *Provider) write(ctx context.Context, key filament.SecretLeaseKey, owner
 	return p.store.SaveSecretVersion(ctx, key, owner, filament.SecretVersionState{Version: version})
 }
 
+// UpdateSecret updates a tenant-owned secret under an exclusive lease.
 func (p *Provider) UpdateSecret(ctx context.Context, tenant filament.TenantID, ref string, fn func(filament.Secret) (filament.Secret, error)) (filament.Secret, error) {
 	key, managed, err := keyFor(p, ref)
 	if err != nil {
@@ -227,6 +233,7 @@ func (p *Provider) UpdateSecret(ctx context.Context, tenant filament.TenantID, r
 	return result, err
 }
 
+// Delete tombstones a managed secret before deleting it from the backend.
 func (p *Provider) Delete(ctx context.Context, ref string) error {
 	key, managed, err := keyFor(p, ref)
 	if err != nil {

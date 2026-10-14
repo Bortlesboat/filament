@@ -14,6 +14,7 @@ import (
 
 var _ filament.SecretCoordinationStore = (*Store)(nil)
 
+// AcquireSecretLease acquires an available lease and returns its version state.
 func (s *Store) AcquireSecretLease(ctx context.Context, key filament.SecretLeaseKey, owner string, ttl time.Duration) (filament.SecretVersionState, bool, error) {
 	if err := validateSecretLease(key, owner); err != nil {
 		return filament.SecretVersionState{}, false, err
@@ -31,6 +32,7 @@ func (s *Store) AcquireSecretLease(ctx context.Context, key filament.SecretLease
 	return filament.SecretVersionState{Version: row.Version, Pending: row.Pending, Deleted: row.Deleted}, true, nil
 }
 
+// SaveSecretVersion updates version state while the owner holds the lease.
 func (s *Store) SaveSecretVersion(ctx context.Context, key filament.SecretLeaseKey, owner string, state filament.SecretVersionState) error {
 	if err := validateSecretLease(key, owner); err != nil {
 		return err
@@ -45,6 +47,7 @@ func (s *Store) SaveSecretVersion(ctx context.Context, key filament.SecretLeaseK
 	return nil
 }
 
+// ReleaseSecretLease releases the lease held by the given owner.
 func (s *Store) ReleaseSecretLease(ctx context.Context, key filament.SecretLeaseKey, owner string) error {
 	if err := validateSecretLease(key, owner); err != nil {
 		return err
