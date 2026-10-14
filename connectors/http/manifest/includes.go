@@ -93,6 +93,30 @@ func (l *fragmentLoader) read(name string, root bool, depth int) (*yaml.Node, er
 	if err := node.Decode(&check); err != nil {
 		return nil, fmt.Errorf("%s: %w", name, err)
 	}
+	includes, err := fragmentIncludes(node, name, root)
+	if err != nil {
+		return nil, err
+	}
+	for _, ref := range includes {
+		next := path.Clean(path.Join(path.Dir(name), ref))
+		if path.IsAbs(ref) || strings.ContainsAny(ref, "\\:") || !fs.ValidPath(next) || next == "." {
+			return nil, fmt.Errorf("%s: include %q escapes the manifest directory or is not a local path", name, ref)
+		}
+		if path.Ext(next) != ".yaml" && path.Ext(next) != ".yml" {
+			return nil, fmt.Errorf("%s: include %q must be YAML", name, ref)
+		}
+		fragment, err := l.read(next, false, depth+1)
+		if err != nil {
+			return nil, err
+		}
+		if err := mergeFragment(node, fragment, next); err != nil {
+			return nil, err
+		}
+	}
+	return node, nil
+}
+
+func fragmentIncludes(node *yaml.Node, name string, root bool) ([]string, error) {
 	var includes []string
 	for i := 0; i < len(node.Content); i += 2 {
 		key, value := node.Content[i].Value, node.Content[i+1]
@@ -113,23 +137,7 @@ func (l *fragmentLoader) read(name string, root bool, depth int) (*yaml.Node, er
 			i -= 2
 		}
 	}
-	for _, ref := range includes {
-		next := path.Clean(path.Join(path.Dir(name), ref))
-		if path.IsAbs(ref) || strings.ContainsAny(ref, "\\:") || !fs.ValidPath(next) || next == "." {
-			return nil, fmt.Errorf("%s: include %q escapes the manifest directory or is not a local path", name, ref)
-		}
-		if path.Ext(next) != ".yaml" && path.Ext(next) != ".yml" {
-			return nil, fmt.Errorf("%s: include %q must be YAML", name, ref)
-		}
-		fragment, err := l.read(next, false, depth+1)
-		if err != nil {
-			return nil, err
-		}
-		if err := mergeFragment(node, fragment, next); err != nil {
-			return nil, err
-		}
-	}
-	return node, nil
+	return includes, nil
 }
 
 func mappingValue(node *yaml.Node, key string) *yaml.Node {

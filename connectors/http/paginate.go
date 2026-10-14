@@ -538,15 +538,8 @@ func (c *Connector) sendRecords(
 		_, emitResource = c.enabledResources[res.Name]
 	}
 	for _, rec := range records {
-		for path, expected := range res.Response.Match {
-			want, err := template.Render(expected, c.scopeFor(parent, "", tracker))
-			if err != nil {
-				return n, captured, err
-			}
-			got, _, err := paths.AsString(rec, path)
-			if err != nil || got != want {
-				return n, captured, fmt.Errorf("resource %s response field %s does not match the requested value", res.Name, path)
-			}
+		if err := c.matchResponse(res, rec, parent, tracker); err != nil {
+			return n, captured, err
 		}
 		if tracker != nil && res.Incremental.CommitOnComplete {
 			field, _ := manifest.IncrementalCursorField(res)
@@ -611,6 +604,20 @@ func (c *Connector) sendRecords(
 
 	}
 	return n, captured, nil
+}
+
+func (c *Connector) matchResponse(res manifest.Resource, rec map[string]any, parent Capture, tracker *incremental.Tracker) error {
+	for path, expected := range res.Response.Match {
+		want, err := template.Render(expected, c.scopeFor(parent, "", tracker))
+		if err != nil {
+			return err
+		}
+		got, _, err := paths.AsString(rec, path)
+		if err != nil || got != want {
+			return fmt.Errorf("resource %s response field %s does not match the requested value", res.Name, path)
+		}
+	}
+	return nil
 }
 
 func extractKey(record map[string]any, primaryKey []string) map[string]any {

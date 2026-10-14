@@ -691,7 +691,7 @@ func Load(path string) (*Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read manifest: %w", err)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	return LoadFS(root.FS(), filepath.Base(path))
 }
 

@@ -2,11 +2,12 @@ package httpapi
 
 import (
 	"fmt"
-	"github.com/galaxy-io/filament"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/galaxy-io/filament"
 )
 
 func TestConfiguredLookupLoopAndSelection(t *testing.T) {
@@ -146,7 +147,8 @@ func TestManifestConfigConstraints(t *testing.T) {
 		{"account": "123"},
 		{"start": "2026-02-30"},
 		{"start": "2026-02-01", "end": "2026-01-01"},
-		{"size": 0}, {"size": 11},
+		{"size": 0},
+		{"size": 11},
 	} {
 		if err := src.Validate(filament.NewConfig(values)); err == nil {
 			t.Fatalf("accepted %v", values)

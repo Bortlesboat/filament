@@ -72,43 +72,11 @@ func projectRecord(res manifest.Resource, record map[string]any, parent Capture,
 			continue
 		}
 		if len(field.Tuple) > 0 {
-			values := make([]string, len(field.Tuple))
-			for i, path := range field.Tuple {
-				if strings.HasPrefix(path, "literal:") {
-					values[i] = strings.TrimPrefix(path, "literal:")
-					continue
-				}
-				if strings.HasPrefix(path, "query:") {
-					q := url.Values{}
-					for _, key := range strings.Split(strings.TrimPrefix(path, "query:"), ",") {
-						value, err := template.Render(res.Query[key], template.Scope{Config: config, Parent: parent})
-						if err != nil {
-							return nil, false, err
-						}
-						if value != "" {
-							q.Set(key, value)
-						}
-					}
-					values[i] = q.Encode()
-					continue
-				}
-				value, err := projectedPathValue(path, record, parent)
-				if err != nil {
-					if errors.Is(err, errs.ErrPathMissing) || errors.Is(err, errs.ErrPathNull) {
-						continue
-					}
-					return nil, false, err
-				}
-				values[i], err = scalarString(value)
-				if err != nil {
-					return nil, false, err
-				}
-			}
-			encoded, err := json.Marshal(values)
+			value, err := projectTuple(field, res, record, parent, config)
 			if err != nil {
 				return nil, false, err
 			}
-			out[field.Name] = string(encoded)
+			out[field.Name] = value
 			continue
 		}
 		if field.Mode == "remainder" {
@@ -166,6 +134,46 @@ func projectRecord(res manifest.Resource, record map[string]any, parent Capture,
 		out[field.Name] = value
 	}
 	return out, true, nil
+}
+
+func projectTuple(field manifest.FieldSpec, res manifest.Resource, record map[string]any, parent Capture, config map[string]string) (string, error) {
+	values := make([]string, len(field.Tuple))
+	for i, path := range field.Tuple {
+		if strings.HasPrefix(path, "literal:") {
+			values[i] = strings.TrimPrefix(path, "literal:")
+			continue
+		}
+		if strings.HasPrefix(path, "query:") {
+			q := url.Values{}
+			for _, key := range strings.Split(strings.TrimPrefix(path, "query:"), ",") {
+				value, err := template.Render(res.Query[key], template.Scope{Config: config, Parent: parent})
+				if err != nil {
+					return "", err
+				}
+				if value != "" {
+					q.Set(key, value)
+				}
+			}
+			values[i] = q.Encode()
+			continue
+		}
+		value, err := projectedPathValue(path, record, parent)
+		if err != nil {
+			if errors.Is(err, errs.ErrPathMissing) || errors.Is(err, errs.ErrPathNull) {
+				continue
+			}
+			return "", err
+		}
+		values[i], err = scalarString(value)
+		if err != nil {
+			return "", err
+		}
+	}
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
 }
 
 func recordRemainder(record map[string]any, fields manifest.FieldList) map[string]any {

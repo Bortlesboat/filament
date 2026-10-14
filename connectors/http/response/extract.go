@@ -215,17 +215,19 @@ func unwrapRecord(wrapper map[string]any, spec manifest.UnwrapSpec) (map[string]
 	var chosen string
 	var record map[string]any
 	for _, variant := range spec.Variants {
-		if value, exists := wrapper[variant]; exists {
-			if chosen != "" {
-				return nil, fmt.Errorf("response: multiple union variants")
-			}
-			var ok bool
-			record, ok = value.(map[string]any)
-			if !ok {
-				return nil, fmt.Errorf("response: union variant is not an object")
-			}
-			chosen = variant
+		value, exists := wrapper[variant]
+		if !exists {
+			continue
 		}
+		if chosen != "" {
+			return nil, fmt.Errorf("response: multiple union variants")
+		}
+		var ok bool
+		record, ok = value.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("response: union variant is not an object")
+		}
+		chosen = variant
 	}
 	if chosen == "" {
 		return nil, fmt.Errorf("response: no supported union variant")

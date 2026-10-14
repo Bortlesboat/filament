@@ -67,6 +67,7 @@ func (s *scanSink) Push(r record) error {
 	s.records = append(s.records, r)
 	return nil
 }
+
 func (s *scanSink) PushBatch(rs []record) error {
 	for _, r := range rs {
 		if err := s.Push(r); err != nil {
@@ -75,6 +76,7 @@ func (s *scanSink) PushBatch(rs []record) error {
 	}
 	return nil
 }
+
 func (s *scanSink) Checkpoint(_, mark string) error {
 	if s.checkpointErr != nil {
 		return s.checkpointErr

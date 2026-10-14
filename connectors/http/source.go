@@ -199,39 +199,46 @@ func (s *Source) Validate(cfg filament.Config) error {
 	}
 	if s.embeddedManifest != nil {
 		creds := credentialsFromConfig(cfg, s.embeddedManifest.Config)
-		for name, spec := range s.embeddedManifest.Config {
-			value := creds[name]
-			if value == "" {
-				continue
-			}
-			if spec.Pattern != "" {
-				match, err := regexp.MatchString(spec.Pattern, value)
-				if err != nil || !match {
-					return fmt.Errorf("%s source: invalid %s", s.name, name)
-				}
-			}
-			if spec.Format == "date" {
-				if _, err := time.Parse(time.DateOnly, value); err != nil {
-					return fmt.Errorf("%s must be YYYY-MM-DD", name)
-				}
-			}
-			if spec.Minimum != nil || spec.Maximum != nil {
-				n, err := strconv.Atoi(value)
-				if err != nil || (spec.Minimum != nil && n < *spec.Minimum) || (spec.Maximum != nil && n > *spec.Maximum) {
-					return fmt.Errorf("%s is outside its allowed range", name)
-				}
-			}
-			for _, required := range spec.Requires {
-				if creds[required] == "" {
-					return fmt.Errorf("%s requires %s", name, required)
-				}
-			}
-			if spec.Before != "" && creds[spec.Before] != "" && value >= creds[spec.Before] {
-				return fmt.Errorf("%s must precede %s", name, spec.Before)
-			}
+		if err := s.validateConfigConstraints(creds); err != nil {
+			return err
 		}
 		_, err := buildAuth(s.embeddedManifest.Connection.Auth, credentialsFromConfig(cfg, s.embeddedManifest.Config), processEnvironment())
 		return err
+	}
+	return nil
+}
+
+func (s *Source) validateConfigConstraints(creds map[string]string) error {
+	for name, spec := range s.embeddedManifest.Config {
+		value := creds[name]
+		if value == "" {
+			continue
+		}
+		if spec.Pattern != "" {
+			match, err := regexp.MatchString(spec.Pattern, value)
+			if err != nil || !match {
+				return fmt.Errorf("%s source: invalid %s", s.name, name)
+			}
+		}
+		if spec.Format == "date" {
+			if _, err := time.Parse(time.DateOnly, value); err != nil {
+				return fmt.Errorf("%s must be YYYY-MM-DD", name)
+			}
+		}
+		if spec.Minimum != nil || spec.Maximum != nil {
+			n, err := strconv.Atoi(value)
+			if err != nil || (spec.Minimum != nil && n < *spec.Minimum) || (spec.Maximum != nil && n > *spec.Maximum) {
+				return fmt.Errorf("%s is outside its allowed range", name)
+			}
+		}
+		for _, required := range spec.Requires {
+			if creds[required] == "" {
+				return fmt.Errorf("%s requires %s", name, required)
+			}
+		}
+		if spec.Before != "" && creds[spec.Before] != "" && value >= creds[spec.Before] {
+			return fmt.Errorf("%s must precede %s", name, spec.Before)
+		}
 	}
 	return nil
 }
