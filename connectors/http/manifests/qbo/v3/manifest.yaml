@@ -3,8 +3,8 @@ version: 1
 name: "qbo"
 display_name: "QuickBooks Online"
 description: "Online accounting software for managing invoices, bills, payments, and company finances."
-dark_logo_url: "https://quickbooks.intuit.com/etc/designs/quickbooks/images/favicon.ico"
-light_logo_url: "https://quickbooks.intuit.com/etc/designs/quickbooks/images/favicon.ico"
+dark_logo_url: "https://cdn.getgalaxy.io/sources/source-icon-qbo-dark.svg"
+light_logo_url: "https://cdn.getgalaxy.io/sources/source-icon-qbo-light.svg"
 api_version: "v3"
 config:
   client_id: {"order": 1, "type": "string", "default": "", "help": "Intuit application client ID. Set with client_secret and refresh_token."}
@@ -87,40 +87,40 @@ defaults:
 field_sets: {}
 includes:
   - fields/shared.yaml
-  - entities/company_info.yaml
-  - entities/accounts.yaml
-  - entities/customers.yaml
-  - entities/vendors.yaml
-  - entities/items.yaml
-  - entities/invoices.yaml
-  - entities/payments.yaml
-  - entities/bills.yaml
-  - entities/bill_payments.yaml
-  - entities/purchases.yaml
-  - entities/journal_entries.yaml
-  - entities/estimates.yaml
-  - entities/sales_receipts.yaml
-  - entities/credit_memos.yaml
-  - entities/refund_receipts.yaml
-  - entities/purchase_orders.yaml
-  - entities/vendor_credits.yaml
-  - entities/deposits.yaml
-  - entities/transfers.yaml
-  - entities/terms.yaml
-  - entities/payment_methods.yaml
-  - entities/classes.yaml
-  - entities/departments.yaml
-  - entities/tax_codes.yaml
-  - entities/tax_rates.yaml
-  - entities/preferences.yaml
-  - entities/employees.yaml
-  - entities/time_activities.yaml
-  - entities/budgets.yaml
-  - entities/attachments.yaml
-  - entities/tax_agencies.yaml
-  - entities/company_currencies.yaml
-  - entities/recurring_transactions.yaml
-  - entities/exchange_rates.yaml
+  - resources/company_info.yaml
+  - resources/accounts.yaml
+  - resources/customers.yaml
+  - resources/vendors.yaml
+  - resources/items.yaml
+  - resources/invoices.yaml
+  - resources/payments.yaml
+  - resources/bills.yaml
+  - resources/bill_payments.yaml
+  - resources/purchases.yaml
+  - resources/journal_entries.yaml
+  - resources/estimates.yaml
+  - resources/sales_receipts.yaml
+  - resources/credit_memos.yaml
+  - resources/refund_receipts.yaml
+  - resources/purchase_orders.yaml
+  - resources/vendor_credits.yaml
+  - resources/deposits.yaml
+  - resources/transfers.yaml
+  - resources/terms.yaml
+  - resources/payment_methods.yaml
+  - resources/classes.yaml
+  - resources/departments.yaml
+  - resources/tax_codes.yaml
+  - resources/tax_rates.yaml
+  - resources/preferences.yaml
+  - resources/employees.yaml
+  - resources/time_activities.yaml
+  - resources/budgets.yaml
+  - resources/attachments.yaml
+  - resources/tax_agencies.yaml
+  - resources/company_currencies.yaml
+  - resources/recurring_transactions.yaml
+  - resources/exchange_rates.yaml
   - reports/report_account_list.yaml
   - reports/report_aged_payable_detail.yaml
   - reports/report_aged_payables.yaml
