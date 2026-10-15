@@ -12,7 +12,7 @@ resources:
       parent_name: {"path": "ParentRef.name", "type": "string", "nullable": true}
       fully_qualified_name: {"path": "FullyQualifiedName", "type": "string", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM Class WHERE Active IN (true, false) STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM Class WHERE Active IN (true, false) ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.Class"
       required_objects: ["QueryResponse"]

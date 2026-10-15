@@ -48,7 +48,7 @@ resources:
       subscription_payments_setting: {"path": "SubscriptionPaymentsSetting", "type": "string", "nullable": true}
       txn_retainage_detail: {"path": "TxnRetainageDetail", "type": "json", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM Invoice{{ state.updated_since | default \"\" }} STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM Invoice{{ state.updated_since | default \"\" }} ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.Invoice"
       required_objects: ["QueryResponse"]

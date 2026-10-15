@@ -47,7 +47,7 @@ resources:
         scale: 18
       notes: {"path": "Notes", "type": "string", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM Employee WHERE Active IN (true, false) STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM Employee WHERE Active IN (true, false) ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.Employee"
       required_objects: ["QueryResponse"]

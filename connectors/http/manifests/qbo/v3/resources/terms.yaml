@@ -20,7 +20,7 @@ resources:
       due_next_month_days: {"path": "DueNextMonthDays", "type": "int64", "nullable": true}
       discount_day_of_month: {"path": "DiscountDayOfMonth", "type": "int64", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM Term WHERE Active IN (true, false) STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM Term WHERE Active IN (true, false) ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.Term"
       required_objects: ["QueryResponse"]

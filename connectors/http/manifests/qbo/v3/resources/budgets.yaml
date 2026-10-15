@@ -13,7 +13,7 @@ resources:
       budget_entry_type: {"path": "BudgetEntryType", "type": "string", "nullable": true}
       budget_detail: {"path": "BudgetDetail", "type": "json", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM Budget STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM Budget ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.Budget"
       required_objects: ["QueryResponse"]

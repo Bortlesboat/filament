@@ -23,7 +23,7 @@ resources:
       last_file_date: {"path": "LastFileDate", "type": "date", "nullable": true}
       tax_agency_config: {"path": "TaxAgencyConfig", "type": "string", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM TaxAgency STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM TaxAgency ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.TaxAgency"
       required_objects: ["QueryResponse"]

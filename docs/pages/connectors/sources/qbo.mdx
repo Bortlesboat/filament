@@ -243,10 +243,17 @@ previous watermark. Full reads restart from the beginning after interruption.
 
 Query reads do not capture deleted transactions. Full replacement reconciles
 records that no longer exist. Upserts alone retain deleted destination rows.
-QBO query pagination has no snapshot isolation. Concurrent changes can shift
-offsets and lookback cannot guarantee recovery from every such change or an
-arbitrary indexing delay. Use periodic full replacement when a current view is
-required. The source does not advertise CDC.
+
+Paginated entity queries use `ORDERBY Id ASC` before `STARTPOSITION` and
+`MAXRESULTS`. Explicit ordering avoids relying on an unspecified response order.
+Sorting by the immutable ID keeps edits to names and timestamps from changing
+a record's sort position. See Intuit's [query guidance](https://medium.com/intuitdev/building-smarter-with-intuit-supercharge-your-queries-fde9d771f8fd).
+
+Ordering does not provide snapshot isolation. Inserts, deletions, and changes
+to which records match the filter can still shift offsets between requests,
+causing skipped or repeated records. The five-minute lookback cannot guarantee
+recovery from every such change or an arbitrary indexing delay. Use periodic
+full replacement when a current view is required. The source does not advertise CDC.
 
 ## Behavior
 

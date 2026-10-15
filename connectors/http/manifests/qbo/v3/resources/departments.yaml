@@ -29,7 +29,7 @@ resources:
       address_tag: {"path": "Address.Tag", "type": "string", "nullable": true}
       address_note: {"path": "Address.Note", "type": "string", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM Department WHERE Active IN (true, false) STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM Department WHERE Active IN (true, false) ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.Department"
       required_objects: ["QueryResponse"]

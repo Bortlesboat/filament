@@ -126,7 +126,7 @@ resources:
       deferred_revenue: {"path": "DeferredRevenue", "type": "bool", "nullable": true}
       custom_extensions: {"path": "CustomExtensions", "type": "json", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM Item WHERE Active IN (true, false) STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM Item WHERE Active IN (true, false) ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.Item"
       required_objects: ["QueryResponse"]

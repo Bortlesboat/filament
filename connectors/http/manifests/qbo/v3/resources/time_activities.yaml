@@ -53,7 +53,7 @@ resources:
       description: {"path": "Description", "type": "string", "nullable": true}
       hours_in_employee_time_zone: {"path": "HoursInEmployeeTimeZone", "type": "bool", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM TimeActivity STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM TimeActivity ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.TimeActivity"
       required_objects: ["QueryResponse"]

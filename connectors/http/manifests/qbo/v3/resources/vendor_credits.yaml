@@ -33,7 +33,7 @@ resources:
         scale: 18
       include_in_annual_tpar: {"path": "IncludeInAnnualTPAR", "type": "bool", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM VendorCredit{{ state.updated_since | default \"\" }} STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM VendorCredit{{ state.updated_since | default \"\" }} ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.VendorCredit"
       required_objects: ["QueryResponse"]

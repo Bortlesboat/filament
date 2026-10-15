@@ -37,7 +37,7 @@ resources:
       process_payment: {"path": "ProcessPayment", "type": "bool", "nullable": true}
       payment_extended_type: {"path": "PaymentExtendedType", "type": "string", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM Payment{{ state.updated_since | default \"\" }} STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM Payment{{ state.updated_since | default \"\" }} ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.Payment"
       required_objects: ["QueryResponse"]

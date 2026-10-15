@@ -21,7 +21,7 @@ resources:
       class_id: {"path": "ClassRef.value", "type": "string", "nullable": true}
       class_name: {"path": "ClassRef.name", "type": "string", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM Transfer{{ state.updated_since | default \"\" }} STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM Transfer{{ state.updated_since | default \"\" }} ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.Transfer"
       required_objects: ["QueryResponse"]

@@ -50,7 +50,7 @@ resources:
       journal_code_id: {"path": "JournalCodeRef.value", "type": "string", "nullable": true}
       journal_code_name: {"path": "JournalCodeRef.name", "type": "string", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM Account WHERE Active IN (true, false) STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM Account WHERE Active IN (true, false) ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.Account"
       required_objects: ["QueryResponse"]

@@ -39,7 +39,7 @@ resources:
         precision: 38
         scale: 18
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM BillPayment{{ state.updated_since | default \"\" }} STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM BillPayment{{ state.updated_since | default \"\" }} ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.BillPayment"
       required_objects: ["QueryResponse"]

@@ -12,7 +12,7 @@ resources:
       accepted_by: {"path": "AcceptedBy", "type": "string", "nullable": true}
       accepted_date: {"path": "AcceptedDate", "type": "date", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM Estimate{{ state.updated_since | default \"\" }} STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM Estimate{{ state.updated_since | default \"\" }} ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.Estimate"
       required_objects: ["QueryResponse"]

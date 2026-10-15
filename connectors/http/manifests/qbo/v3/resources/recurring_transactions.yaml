@@ -40,7 +40,7 @@ resources:
         scale: 18
       due_date: {"path": "DueDate", "type": "date", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM RecurringTransaction STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM RecurringTransaction ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.RecurringTransaction"
       required_objects: ["QueryResponse"]

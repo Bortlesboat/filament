@@ -17,7 +17,7 @@ resources:
       invoice_id: {"path": "InvoiceRef.value", "type": "string", "nullable": true}
       invoice_name: {"path": "InvoiceRef.name", "type": "string", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM CreditMemo{{ state.updated_since | default \"\" }} STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM CreditMemo{{ state.updated_since | default \"\" }} ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.CreditMemo"
       required_objects: ["QueryResponse"]

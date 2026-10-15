@@ -72,7 +72,7 @@ resources:
       manually_closed: {"path": "ManuallyClosed", "type": "bool", "nullable": true}
       po_status: {"path": "POStatus", "type": "string", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM PurchaseOrder{{ state.updated_since | default \"\" }} STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM PurchaseOrder{{ state.updated_since | default \"\" }} ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.PurchaseOrder"
       required_objects: ["QueryResponse"]

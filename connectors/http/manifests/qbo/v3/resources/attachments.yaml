@@ -21,7 +21,7 @@ resources:
       thumbnail_temp_download_uri: {"path": "ThumbnailTempDownloadUri", "type": "string", "nullable": true}
       document_id: {"path": "documentId", "type": "string", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM Attachable STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM Attachable ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.Attachable"
       required_objects: ["QueryResponse"]

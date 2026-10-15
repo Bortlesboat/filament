@@ -9,7 +9,7 @@ resources:
       name: {"path": "Name", "type": "string", "nullable": true}
       type: {"path": "Type", "type": "string", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM PaymentMethod WHERE Active IN (true, false) STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM PaymentMethod WHERE Active IN (true, false) ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.PaymentMethod"
       required_objects: ["QueryResponse"]

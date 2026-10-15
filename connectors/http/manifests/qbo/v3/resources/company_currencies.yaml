@@ -11,7 +11,7 @@ resources:
       code: {"path": "Code", "type": "string", "nullable": false}
       name: {"path": "Name", "type": "string", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM CompanyCurrency STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM CompanyCurrency ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.CompanyCurrency"
       required_objects: ["QueryResponse"]

@@ -24,7 +24,7 @@ resources:
       original_tax_rate_id: {"path": "OriginalTaxRate.value", "type": "string", "nullable": true}
       original_tax_rate_name: {"path": "OriginalTaxRate.name", "type": "string", "nullable": true}
       raw: {"path": "$", "type": "json", "mode": "remainder"}
-    query: {"query": "SELECT * FROM TaxRate WHERE Active IN (true, false) STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
+    query: {"query": "SELECT * FROM TaxRate WHERE Active IN (true, false) ORDERBY Id ASC STARTPOSITION {{ state.offset }} MAXRESULTS {{ state.page_size }}"}
     response:
       records: "$.QueryResponse.TaxRate"
       required_objects: ["QueryResponse"]
