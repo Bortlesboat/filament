@@ -398,37 +398,12 @@ type Secret struct {
 	Meta   map[string]string
 }
 
-// SecretCoordinationStore coordinates external secret managers without storing
-// credential material. Lease expiry uses the database clock. All writes are
-// fenced by the owner and expiry, including after a process restart.
-type SecretCoordinationStore interface {
-	AcquireSecretLease(context.Context, SecretLeaseKey, string, time.Duration) (SecretVersionState, bool, error)
-	SaveSecretVersion(context.Context, SecretLeaseKey, string, SecretVersionState) error
-	ReleaseSecretLease(context.Context, SecretLeaseKey, string) error
+// SecretRotator replaces the value of an existing secret without creating a
+// secret or changing its reference. Rotation must not recreate a deleted secret.
+// Implementations preserve tenant isolation and encrypt values at rest.
+type SecretRotator interface {
+	RotateSecret(ctx context.Context, ref string, secret Secret) error
 }
-
-// SecretLeaseKey identifies one tenant's secret in one configured backend.
-type SecretLeaseKey struct {
-	Tenant TenantID
-	Scope  string
-	Ref    string
-}
-
-// SecretVersionState contains only coordination metadata, never token values.
-// Pending survives lease expiry: an interrupted exchange must not be repeated.
-// Deleted is a tombstone so stale workers cannot resurrect removed credentials.
-type SecretVersionState struct {
-	Version string
-	Pending bool
-	Deleted bool
-}
-
-var (
-	// ErrSecretLeaseLost indicates that an update no longer owns its lease.
-	ErrSecretLeaseLost = errors.New("secret update ownership expired or changed")
-	// ErrSecretUpdateUncertain indicates that an interrupted update needs fresh credentials.
-	ErrSecretUpdateUncertain = errors.New("secret update was interrupted; supply fresh credentials through connection settings")
-)
 
 // ConnectionSecretPrefix namespaces the secret refs the connection API mints on
 // a tenant's behalf: connections/<tenant>/<connID>/<field>/v<version>.

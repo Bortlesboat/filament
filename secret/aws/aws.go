@@ -16,11 +16,9 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"github.com/galaxy-io/filament"
 )
@@ -43,11 +41,8 @@ type API interface {
 
 // Provider stores secrets in AWS Secrets Manager.
 type Provider struct {
-	client    API
-	prefix    string
-	region    string
-	partition string
-	account   string
+	client API
+	prefix string
 }
 
 // Option configures a Provider.
@@ -57,13 +52,6 @@ type Option func(*Provider)
 // Secrets Manager name. A slash always separates the prefix from the rest of
 // the name, so a trailing one is trimmed.
 func WithPrefix(prefix string) Option { return func(p *Provider) { p.prefix = prefix } }
-
-// WithIdentity supplies the namespace of an explicitly injected client's
-// credentials. It is required for coordinated updates when using New directly.
-// NewFromConfig discovers this identity through STS instead.
-func WithIdentity(partition, account, region string) Option {
-	return func(p *Provider) { p.partition, p.account, p.region = partition, account, region }
-}
 
 // New constructs a provider from an explicit Secrets Manager API. Use this to
 // inject a preconfigured client (custom region, credentials, or a test fake).
@@ -78,7 +66,7 @@ func New(client API, opts ...Option) *Provider {
 
 // NewFromConfig loads the default AWS config chain (env, shared config,
 // IAM role) and returns a Secrets Manager–backed provider. Fails fast when
-// no region is configured or the caller identity cannot be resolved.
+// no region is configured.
 func NewFromConfig(ctx context.Context, opts ...Option) (*Provider, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
@@ -87,33 +75,7 @@ func NewFromConfig(ctx context.Context, opts ...Option) (*Provider, error) {
 	if cfg.Region == "" {
 		return nil, errors.New("secret/aws: no region configured (set AWS_REGION)")
 	}
-	p := New(secretsmanager.NewFromConfig(cfg), opts...)
-	p.region = cfg.Region
-	if err := p.resolveIdentity(ctx, sts.NewFromConfig(cfg)); err != nil {
-		return nil, err
-	}
-	return p, nil
-}
-
-type identityAPI interface {
-	GetCallerIdentity(context.Context, *sts.GetCallerIdentityInput, ...func(*sts.Options)) (*sts.GetCallerIdentityOutput, error)
-}
-
-func (p *Provider) resolveIdentity(ctx context.Context, client identityAPI) error {
-	identity, err := client.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
-	if err != nil {
-		return fmt.Errorf("secret/aws: resolve caller identity: %w", err)
-	}
-	if identity == nil {
-		return errors.New("secret/aws: missing caller identity")
-	}
-	caller, err := arn.Parse(aws.ToString(identity.Arn))
-	account := aws.ToString(identity.Account)
-	if err != nil || caller.Partition == "" || account == "" || caller.AccountID != account {
-		return errors.New("secret/aws: invalid caller identity")
-	}
-	p.partition, p.account = caller.Partition, account
-	return nil
+	return New(secretsmanager.NewFromConfig(cfg), opts...), nil
 }
 
 // Name returns the provider identifier.
@@ -140,36 +102,19 @@ func (p *Provider) name(ref string) string {
 	return ref
 }
 
-// Read fetches and decodes the secret at ref.
+// Read fetches and decodes the current secret at ref.
 func (p *Provider) Read(ctx context.Context, ref string) (filament.Secret, error) {
-	value, _, err := p.ReadVersion(ctx, ref, "")
-	return value, err
-}
-
-// SecretScope separates coordination for configured cloud namespaces.
-func (p *Provider) SecretScope() string {
-	if p.partition == "" || p.account == "" || p.region == "" {
-		return ""
-	}
-	return "aws-secrets-manager/" + p.partition + "/" + p.account + "/" + p.region + "/" + cmp.Or(p.prefix, defaultPrefix)
-}
-
-// ReadVersion reads an immutable version, or current when version is empty.
-func (p *Provider) ReadVersion(ctx context.Context, ref, version string) (filament.Secret, string, error) {
 	name := p.name(ref)
 	input := &secretsmanager.GetSecretValueInput{SecretId: aws.String(name)}
-	if version != "" {
-		input.VersionId = aws.String(version)
-	}
 	out, err := p.client.GetSecretValue(ctx, input)
 	if err != nil {
 		// Scheduled-for-deletion secrets surface as InvalidRequestException.
 		var notFound *smtypes.ResourceNotFoundException
 		var invalid *smtypes.InvalidRequestException
 		if errors.As(err, &notFound) || errors.As(err, &invalid) {
-			return filament.Secret{}, "", fmt.Errorf("secret/aws: read %q: %w", ref, filament.ErrNotFound)
+			return filament.Secret{}, fmt.Errorf("secret/aws: read %q: %w", ref, filament.ErrNotFound)
 		}
-		return filament.Secret{}, "", fmt.Errorf("secret/aws: read %q: %w", ref, err)
+		return filament.Secret{}, fmt.Errorf("secret/aws: read %q: %w", ref, err)
 	}
 	var raw []byte
 	switch {
@@ -178,57 +123,69 @@ func (p *Provider) ReadVersion(ctx context.Context, ref, version string) (filame
 	case out.SecretBinary != nil:
 		raw = out.SecretBinary
 	default:
-		return filament.Secret{}, "", fmt.Errorf("secret/aws: read %q: empty secret", ref)
+		return filament.Secret{}, fmt.Errorf("secret/aws: read %q: empty secret", ref)
 	}
 	var env envelope
 	if err := json.Unmarshal(raw, &env); err != nil {
-		return filament.Secret{}, "", fmt.Errorf("secret/aws: read %q: decode: %w", ref, err)
+		return filament.Secret{}, fmt.Errorf("secret/aws: read %q: decode: %w", ref, err)
 	}
 	// Unknown keys are ignored, so foreign secrets decode to a nil Value.
 	if env.Value == nil {
-		return filament.Secret{}, "", fmt.Errorf("secret/aws: read %q: not a filament envelope", ref)
+		return filament.Secret{}, fmt.Errorf("secret/aws: read %q: not a filament envelope", ref)
 	}
-	return filament.Secret{Value: env.Value, Meta: env.Meta}, aws.ToString(out.VersionId), nil
+	return filament.Secret{Value: env.Value, Meta: env.Meta}, nil
 }
 
 // Write creates the secret if absent, otherwise stores a new version.
 func (p *Provider) Write(ctx context.Context, ref string, s filament.Secret) error {
-	_, err := p.WriteVersion(ctx, ref, s)
-	return err
+	return p.write(ctx, ref, s, true)
 }
 
-// WriteVersion updates the same secret name and returns the immutable version.
-func (p *Provider) WriteVersion(ctx context.Context, ref string, s filament.Secret) (string, error) {
+// RotateSecret appends a version under the existing name, never creating a secret.
+func (p *Provider) RotateSecret(ctx context.Context, ref string, s filament.Secret) error {
+	if s.Tenant == "" {
+		return errors.New("secret/aws: tenant is required")
+	}
+	if err := filament.ValidateConnectionSecretRef(ref, s.Tenant); err != nil {
+		return err
+	}
+	return p.write(ctx, ref, s, false)
+}
+
+func (p *Provider) write(ctx context.Context, ref string, s filament.Secret, create bool) error {
 	name := p.name(ref)
 	raw, err := json.Marshal(envelope{Value: s.Value, Meta: s.Meta})
 	if err != nil {
-		return "", fmt.Errorf("secret/aws: encode: %w", err)
+		return fmt.Errorf("secret/aws: encode: %w", err)
 	}
 	token := fmt.Sprintf("%x", rand.Text())
-	put := func() (string, error) {
-		out, err := p.client.PutSecretValue(ctx, &secretsmanager.PutSecretValueInput{SecretId: aws.String(name), SecretString: aws.String(string(raw)), ClientRequestToken: aws.String(token)})
+	put := func() error {
+		_, err := p.client.PutSecretValue(ctx, &secretsmanager.PutSecretValueInput{SecretId: aws.String(name), SecretString: aws.String(string(raw)), ClientRequestToken: aws.String(token)})
 		if err != nil {
-			return "", err
+			return err
 		}
-		return aws.ToString(out.VersionId), nil
+		return nil
 	}
-	version, err := put()
+	err = put()
 	if err == nil {
-		return version, nil
+		return nil
 	}
 	var notFound *smtypes.ResourceNotFoundException
-	if !errors.As(err, &notFound) {
-		return "", fmt.Errorf("secret/aws: write %q: %w", ref, err)
+	if errors.As(err, &notFound) && !create {
+		return fmt.Errorf("secret/aws: rotate %q: %w", ref, filament.ErrNotFound)
 	}
-	out, err := p.client.CreateSecret(ctx, &secretsmanager.CreateSecretInput{Name: aws.String(name), SecretString: aws.String(string(raw)), ClientRequestToken: aws.String(token)})
+	if !errors.As(err, &notFound) {
+		return fmt.Errorf("secret/aws: write %q: %w", ref, err)
+	}
+	_, err = p.client.CreateSecret(ctx, &secretsmanager.CreateSecretInput{Name: aws.String(name), SecretString: aws.String(string(raw)), ClientRequestToken: aws.String(token)})
 	if err != nil {
 		var exists *smtypes.ResourceExistsException
 		if errors.As(err, &exists) {
 			return put()
 		}
-		return "", fmt.Errorf("secret/aws: create %q: %w", ref, err)
+		return fmt.Errorf("secret/aws: create %q: %w", ref, err)
 	}
-	return aws.ToString(out.VersionId), nil
+	return nil
 }
 
 // ErrUnmanaged is returned by Delete for a secret the provider cannot prove

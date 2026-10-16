@@ -221,17 +221,6 @@ type Secret struct {
 	UpdatedAt  int64
 }
 
-type SecretCoordination struct {
-	TenantID  string
-	Scope     string
-	Ref       string
-	Owner     string
-	ExpiresAt int64
-	Version   string
-	Pending   int64
-	Deleted   int64
-}
-
 type StreamAttempt struct {
 	Token           int64
 	StreamID        string
