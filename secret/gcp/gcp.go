@@ -43,6 +43,7 @@ type API interface {
 	CreateSecret(context.Context, *secretmanagerpb.CreateSecretRequest, ...gax.CallOption) (*secretmanagerpb.Secret, error)
 	AddSecretVersion(context.Context, *secretmanagerpb.AddSecretVersionRequest, ...gax.CallOption) (*secretmanagerpb.SecretVersion, error)
 	DeleteSecret(context.Context, *secretmanagerpb.DeleteSecretRequest, ...gax.CallOption) error
+	DestroySecretVersion(context.Context, *secretmanagerpb.DestroySecretVersionRequest, ...gax.CallOption) (*secretmanagerpb.SecretVersion, error)
 }
 
 // Provider stores secrets in Google Cloud Secret Manager.
@@ -135,17 +136,12 @@ func (p *Provider) parentName() string {
 
 // Read fetches and decodes the latest version of the secret at ref.
 func (p *Provider) Read(ctx context.Context, ref string) (filament.Secret, error) {
-	value, _, err := p.ReadVersion(ctx, ref, "")
+	value, _, err := p.readVersion(ctx, ref, "")
 	return value, err
 }
 
-// SecretScope separates coordination for configured cloud namespaces.
-func (p *Provider) SecretScope() string {
-	return "gcp-secret-manager/" + p.parentName() + "/" + cmp.Or(p.prefix, defaultPrefix)
-}
-
-// ReadVersion reads an immutable version, or latest when version is empty.
-func (p *Provider) ReadVersion(ctx context.Context, ref, version string) (filament.Secret, string, error) {
+// readVersion reads an immutable version, or latest when version is empty.
+func (p *Provider) readVersion(ctx context.Context, ref, version string) (filament.Secret, string, error) {
 	if version != "" {
 		if _, err := strconv.ParseUint(version, 10, 64); err != nil {
 			return filament.Secret{}, "", errors.New("secret/gcp: invalid version number")
@@ -178,12 +174,12 @@ func (p *Provider) ReadVersion(ctx context.Context, ref, version string) (filame
 
 // Write creates the secret if absent, otherwise stores a new version.
 func (p *Provider) Write(ctx context.Context, ref string, s filament.Secret) error {
-	_, err := p.WriteVersion(ctx, ref, s)
+	_, err := p.writeVersion(ctx, ref, s)
 	return err
 }
 
-// WriteVersion appends a version to the same secret and returns its number.
-func (p *Provider) WriteVersion(ctx context.Context, ref string, s filament.Secret) (string, error) {
+// writeVersion appends a version to the same secret and returns its number.
+func (p *Provider) writeVersion(ctx context.Context, ref string, s filament.Secret) (string, error) {
 	raw, err := json.Marshal(envelope{Ref: ref, Tenant: s.Tenant, Value: s.Value, Meta: s.Meta})
 	if err != nil {
 		return "", fmt.Errorf("secret/gcp: write %q: encode: %w", ref, err)
@@ -216,6 +212,55 @@ func (p *Provider) WriteVersion(ctx context.Context, ref string, s filament.Secr
 		return "", fmt.Errorf("secret/gcp: write %q: %w", ref, err)
 	}
 	return p.versionNumber(ref, version.Name)
+}
+
+// RotateSecret adds a version to the same secret, then destroys the old version.
+// A failed append leaves the old version intact. Cleanup errors are returned even
+// though the new version has already become latest.
+func (p *Provider) RotateSecret(ctx context.Context, ref string, s filament.Secret) error {
+	if s.Tenant == "" {
+		return errors.New("secret/gcp: tenant is required")
+	}
+	if err := filament.ValidateConnectionSecretRef(ref, s.Tenant); err != nil {
+		return err
+	}
+	name := p.secretName(ref)
+	secret, err := p.client.GetSecret(ctx, &secretmanagerpb.GetSecretRequest{Name: name})
+	if status.Code(err) == codes.NotFound {
+		return filament.ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("secret/gcp: inspect rotation: %w", err)
+	}
+	if err := managed(secret, ref); err != nil {
+		return err
+	}
+	current, old, err := p.readVersion(ctx, ref, "")
+	if err != nil {
+		return err
+	}
+	if current.Tenant != "" && current.Tenant != s.Tenant {
+		return errors.New("secret/gcp: secret belongs to another tenant")
+	}
+	raw, err := json.Marshal(envelope{Ref: ref, Tenant: s.Tenant, Value: s.Value, Meta: s.Meta})
+	if err != nil {
+		return fmt.Errorf("secret/gcp: encode rotation: %w", err)
+	}
+	version, err := p.client.AddSecretVersion(ctx, &secretmanagerpb.AddSecretVersionRequest{Parent: name, Payload: &secretmanagerpb.SecretPayload{Data: raw}})
+	if err != nil {
+		return fmt.Errorf("secret/gcp: rotate %q: %w", ref, err)
+	}
+	next, err := p.versionNumber(ref, version.Name)
+	if err != nil {
+		return err
+	}
+	if next == old {
+		return errors.New("secret/gcp: rotation returned the old version")
+	}
+	if _, err := p.client.DestroySecretVersion(ctx, &secretmanagerpb.DestroySecretVersionRequest{Name: name + "/versions/" + old}); err != nil {
+		return fmt.Errorf("secret/gcp: destroy previous version after rotation: %w", err)
+	}
+	return nil
 }
 
 // ErrUnmanaged is returned when Provider cannot prove it owns a secret.
