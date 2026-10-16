@@ -329,17 +329,6 @@ type Secret struct {
 	UpdatedAt       pgtype.Timestamptz
 }
 
-type SecretCoordination struct {
-	TenantID  string
-	Scope     string
-	Ref       string
-	Owner     string
-	ExpiresAt int64
-	Version   string
-	Pending   bool
-	Deleted   bool
-}
-
 type StreamAttempt struct {
 	Token           int64
 	StreamID        string

@@ -151,9 +151,9 @@ It refreshes on demand and exposes `Token(ctx)` to Go drivers. HTTP manifests
 use the same implementation. Browser authorization and callback handlers are
 outside this package.
 
-Create an encrypted token store with an existing Postgres or SQLite secret
-provider. Give each authorization a stable ID scoped to its tenant. Connections
-that share an authorization should use the same ID and OAuth client settings.
+Bind a run-scoped store to an existing connection refresh-token secret. The
+provider must implement `filament.SecretRotator`. PostgreSQL, SQLite, AWS and
+GCP providers support it.
 
 ```go
 import (
@@ -161,14 +161,8 @@ import (
     oauthsecrets "github.com/galaxy-io/filament/oauth/secrets"
 )
 
-store, err := oauthsecrets.New(secretProvider, tenant, credentialID)
+store, err := oauthsecrets.FromRefreshToken(secretProvider, tenant, refreshSecretRef, binding)
 if err != nil {
-    return err
-}
-
-// Run once when provisioning or explicitly replacing the authorization.
-// Do not reseed it when starting a run.
-if err := store.Set(ctx, oauth.Token{RefreshToken: refreshToken}); err != nil {
     return err
 }
 
@@ -191,51 +185,34 @@ if err != nil {
 token.SetAuthHeader(req)
 ```
 
-A future authorization-code callback can pass the issued tokens to the same
-`store.Set` method. A driver can depend on the small `oauth.TokenSource`
-interface. For an HTTP source, call `source.SetOAuthStore(store)` before
-`Configure` or `TestConnection`. This is an explicit Go integration hook.
+A driver can depend on the small `oauth.TokenSource` interface. For an HTTP
+source, call `source.SetOAuthStore(store)` before `Configure` or `TestConnection`.
+This is an explicit Go integration hook.
 
-The connection API and worker protocol do not provision standalone
-OAuth credential IDs. A driver can implement `oauth/secrets.Configurable` to
-identify its saved refresh-token field and an authorization-settings fingerprint.
-The runner binds that managed secret through `oauth/secrets.Bind` before source
-configuration. Binding performs no secret reads or token exchanges. The first
-refresh saves token state under the same encrypted reference. Connection
-replacement and deletion use the existing secret lifecycle. Unsaved connection
-validation must not exchange rotating tokens.
+A driver can implement `oauth/secrets.Configurable` to identify its saved
+refresh-token field and authorization settings. The runner binds that secret
+through `oauth/secrets.Bind` before source configuration. Binding performs no
+secret reads or exchanges. Unsaved connection validation must not exchange
+rotating tokens.
 
-Token state stays in the configured secret manager. PostgreSQL and SQLite store
-encrypted token values in the existing secrets table. Their refreshes and
-explicit replacements serialize under a row lock or writer transaction.
-SQLite holds its writer lock while requesting a token, so other writes wait.
-Token requests default to a 30-second timeout and store updates are bounded
-by 35 seconds. The transaction callback must not reenter the same database.
+The store loads the refresh token on first use and keeps access tokens and
+expiry in memory for that run. Only a changed refresh token is written back.
+PostgreSQL and SQLite use an encrypted update of the existing secret row. AWS
+uses `PutSecretValue`. GCP uses `AddSecretVersion` and destroys the previous
+version. Rotation never creates a secret or updates the connection row.
 
-AWS and GCP providers use `secret/coordinated` with a datastore implementing
-`filament.SecretCoordinationStore`. Shared startup wraps these providers
-automatically. Library users must construct the wrapper explicitly. Cloud token
-values remain in the secret manager. The datastore stores only lease ownership,
-version identifiers, and pending or deleted status. Each read uses the exact
-committed version. Replacement and deletion use the same coordination.
+Refreshes serialize within the store. Separate runs have independent token
+state. No database transaction spans a token request and no coordination table
+is required. Token requests default to a 30-second timeout.
 
-Use `oauth.NewMemoryStore` for temporary credentials or tests. It shares state
-only within one process. The environment provider is read-only and cannot persist
-rotating tokens. Other integrations can implement `oauth.Store` or use
-`oauth.StoreFunc`. Serialize the whole read, exchange and save operation across
-callers. A conditional write after concurrent exchanges is insufficient.
+Use `oauth.NewMemoryStore` for temporary credentials or tests. The environment
+provider is read-only and cannot persist rotating tokens. Other integrations can
+implement `oauth.Store` or use `oauth.StoreFunc`.
 
-For cloud stores, an interrupted update remains pending and blocks another
-exchange. Supply fresh authorization through connection settings to recover.
-Do not write Filament-managed secrets outside the coordinated provider. A cloud write and an OAuth exchange
-cannot be committed as one database transaction.
-
-A returned token is available only after persistence succeeds. With the
-database-backed stores, if saving fails, the source retains the exchange and
-tries to save it on the next call. It does not overwrite a newer authorization.
-A process crash after upstream rotation but before persistence can still require
-reauthorization. Remote token issuance
-and local storage cannot share a transaction.
+A returned token is available only after any refresh-token write succeeds. A
+failed save retains the exchange in memory for another save attempt without
+exchanging the consumed token again. A process exit between upstream rotation
+and persistence can require fresh authorization.
 
 Check `errors.Is(err, oauth.ErrReauthorizationRequired)` for an expired or revoked
 refresh grant. Endpoint errors expose HTTP status and an allowlisted OAuth code,
@@ -243,6 +220,5 @@ without provider descriptions or raw responses. Token requests do not retry
 automatically. The HTTP adapter's optional retry policy accepts explicit
 temporary rejections and avoids retrying ambiguous transport failures.
 
-Call `store.Delete(ctx)` when removing an authorization. This removes local
-tokens only. Provider-side revocation remains a separate operation. Token values
+Use the connection’s existing secret lifecycle when removing an authorization. Provider-side revocation remains a separate operation. Token values
 must never appear in logs, events, ordinary connection config or API responses.

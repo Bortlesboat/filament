@@ -99,36 +99,29 @@ instead bind an `oauth.Store` with `Source.SetOAuthStore`.
 
 The first read exchanges the saved refresh token. The optional `access_token`
 field is ignored when refresh credentials are configured. Later reads reuse
-the saved access token until its expiry is within 30 seconds. If QuickBooks
+the run’s access token until its expiry is within 30 seconds. If QuickBooks
 rejects it with HTTP 401, the source refreshes and replays the read once. A
-second 401 stops the read. Another worker's fresh replacement is reused.
+second 401 stops the read. Concurrent callers within the run reuse the fresh replacement.
 
-Access and refresh tokens, expiry, and a fingerprint of the authorization
-settings are saved together in the encrypted `refresh_token` value. The same
-secret reference remains in the connection. Changing the company, environment,
-client ID or client secret after a successful refresh requires supplying a new
-refresh token through connection settings. The existing connection update and
-delete operations manage these secrets normally. Cloud providers use the
-datastore secret coordination migration to track ownership and exact versions.
-No token values are stored in that coordination table.
+Access tokens and expiry stay in memory for one run. Only a changed refresh
+token is saved to the existing `refresh_token` secret. Rotation does not create
+a secret or change the connection row. PostgreSQL and SQLite update the encrypted
+value in place. AWS adds a version under the same name. GCP adds a version and
+destroys the previous one.
 
-PostgreSQL serializes refreshes with a row lock. SQLite holds its writer lock
-during the token request, so other writes wait. Token requests have a 30-second
-timeout and storage operations have a 35-second bound. Both honor cancellation.
-Cloud providers coordinate through 60-second datastore leases and read exact
-secret versions. Interrupted updates require fresh authorization through
-connection settings. All workers sharing the authorization must use the same
-secret storage and coordination datastore.
+Each run loads the saved refresh token once. Calls within the run share token
+state, while separate runs refresh independently. There are no datastore locks
+around token exchanges and no coordination table. Token requests have a
+30-second timeout and honor cancellation.
 
 Configuration validation for automatic-refresh connections is local only.
 The validation RPC does not exchange tokens. The first move verifies live
 access. Local catalog discovery remains available without exchanging tokens.
 A revoked or expired refresh token requires reauthorization. Failed or ambiguous
 token exchanges are not automatically retried. Save failures stop the read.
-For datastore-backed secrets, the shared token source retains a successful
-exchange for a later save attempt while that source remains alive. Cloud stores
-block uncertain updates until fresh credentials are supplied. A process exit or cancellation between upstream
-rotation and persistence can still require reauthorization.
+The run retains a successful exchange for a later save attempt while it remains
+alive. A process exit between upstream rotation and persistence can still
+require reauthorization.
 
 Tokens and upstream OAuth error descriptions are never emitted in activity or
 logs. See Intuit's [refresh-token guidance](https://github.com/intuit/oauth-jsclient#refresh-access_token).

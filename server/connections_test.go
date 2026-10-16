@@ -60,28 +60,28 @@ func (s *refreshCredentialSource) Spec() filament.ConnectorSpec {
 	return filament.ConnectorSpec{Name: "refresh-fixture", Config: filament.ConfigSchema{Fields: []filament.ConfigField{{Name: "refresh_token", Type: filament.FieldSecret, Required: true}}}}
 }
 
-type interruptedSecrets struct {
+type unavailableSecrets struct {
 	filament.Secrets
 	blocked      string
 	blockedReads int
 }
 
-func (s *interruptedSecrets) Read(ctx context.Context, ref string) (filament.Secret, error) {
+func (s *unavailableSecrets) Read(ctx context.Context, ref string) (filament.Secret, error) {
 	if ref == s.blocked {
 		s.blockedReads++
-		return filament.Secret{}, filament.ErrSecretUpdateUncertain
+		return filament.Secret{}, errors.New("secret temporarily unavailable")
 	}
 	return s.Secrets.Read(ctx, ref)
 }
 
-func TestConnectionCanReplaceInterruptedRefreshCredential(t *testing.T) {
+func TestConnectionCanReplaceUnavailableRefreshCredential(t *testing.T) {
 	store := sqlite.NewMemory()
 	defer store.Close()
 	backend, err := secretsqlite.New(store.DB(), "test", make([]byte, 32))
 	if err != nil {
 		t.Fatal(err)
 	}
-	secrets := &interruptedSecrets{Secrets: backend}
+	secrets := &unavailableSecrets{Secrets: backend}
 	sources := registry.NewSources()
 	sources.Register("refresh-fixture", func() filament.Source { return &refreshCredentialSource{} })
 	api := New(worker.Local(sources, registry.NewSinks()), store, nil, nil, WithSecrets(secrets))
