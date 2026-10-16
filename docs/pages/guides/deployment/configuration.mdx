@@ -92,11 +92,7 @@ a multi-key rotation mechanism.
 </Warning>
 
 The AWS provider loads credentials through the standard AWS SDK chain. It
-stores each Filament secret as a JSON envelope in AWS Secrets Manager. Startup
-calls [STS GetCallerIdentity](https://docs.aws.amazon.com/STS/latest/APIReference/API_GetCallerIdentity.html)
-to identify the AWS account and partition. Coordination separates secrets by
-partition, account, region, and prefix. Workloads must be able to reach STS as
-well as Secrets Manager. Startup fails if identity discovery fails.
+stores each Filament secret as a JSON envelope in AWS Secrets Manager.
 
 The GCP provider loads Application Default Credentials and uses regional Secret
 Manager secrets. Filament refs are mapped to deterministic
@@ -104,28 +100,26 @@ GCP-safe IDs and retained in secret annotations. Grant workloads access through
 their attached service account or Workload Identity. Deleting a connection
 permanently deletes its managed GCP secrets.
 
-Managed OAuth refresh is supported with all four providers. Access tokens,
-refresh tokens, and expiry remain in the selected secret manager. Cloud providers
-write new versions under the same secret name. They do not require
-`ENCRYPTION_KEY`.
+Managed OAuth refresh is supported with all four providers. Access tokens and
+expiry stay in memory for one run. Only a changed refresh token is written back
+to its existing secret. Rotation never creates a secret or updates a connection
+row. PostgreSQL and SQLite update the encrypted value in place. AWS uses
+[PutSecretValue](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_PutSecretValue.html).
+GCP adds a version and then
+[destroys the previous version](https://docs.cloud.google.com/secret-manager/regional-secrets/destroy-regional-secret-version).
+Grant GCP workloads the `secretmanager.versions.destroy` permission as well as
+read and write access. Cloud providers do not require `ENCRYPTION_KEY`.
 
-For AWS and GCP, the datastore holds tenant-scoped coordination records with an
-owner, expiry, version identifier, and operation status. It contains no token
-values. Apply the secret coordination migration before starting the updated
-services. All servers and workers sharing secrets must use the same datastore
-and the updated secret provider wrapper.
+Refreshes are serialized within each run. Separate runs have independent token
+state and do not acquire datastore leases. Avoid overlapping runs that share an
+authorization when the upstream provider invalidates refresh tokens on use.
+The datastore no longer tracks cloud secret versions or refresh ownership.
 
-Cloud updates have a 35-second operation timeout inside a 60-second lease.
-Workers read the exact committed version instead of the provider's latest alias.
-Do not edit Filament-managed secrets directly in the cloud console. Replace
-credentials through connection settings so the version record is updated.
-
-An interrupted exchange or ambiguous cloud write blocks further automatic
-refreshes for that reference. Supply fresh credentials through connection
-settings to recover. The replacement creates a new managed reference and retires
-the old reference.
-Deleting a connection leaves a coordination tombstone to prevent stale workers
-from recreating its secret. Failed cloud deletion can be retried.
+A failed save stops the read. The run retains a successful exchange in memory
+for another save attempt. A process exit between upstream rotation and persistence
+can require fresh authorization. If GCP version cleanup fails, rotation reports
+an error even though the new version is already available. The previous version
+may need cleanup.
 
 ### Logs and OpenTelemetry
 
