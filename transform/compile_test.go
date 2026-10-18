@@ -8,6 +8,8 @@ import (
 	"github.com/galaxy-io/filament/rowmodel"
 )
 
+// TestRenameEntriesAreIndependent checks renames against each step's incoming schema.
+// Dependent renames must be split into successive steps.
 func TestRenameEntriesAreIndependent(t *testing.T) {
 	tests := []struct {
 		name    string
